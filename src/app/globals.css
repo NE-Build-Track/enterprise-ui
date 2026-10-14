@@ -113,6 +113,7 @@
 
   h1,
   h2,
+  h3,
   .site-name {
     font-family: var(--font-display), Georgia, serif;
     font-weight: 560;
@@ -223,6 +224,38 @@
     grid-column: 1 / -1;
   }
 
+  main > section,
+  main > details.section {
+    margin-block-start: calc(var(--space) * 1.5);
+  }
+
+  main > section > h2 {
+    margin-block: 0 0.75rem;
+  }
+
+  .split {
+    container-type: inline-size;
+  }
+
+  #jobs,
+  #allowance,
+  #costs,
+  #reconciliation {
+    scroll-margin-block-start: var(--space);
+  }
+
+  @container (min-width: 60rem) {
+    .split > .panel {
+      grid-template-columns: minmax(18rem, 2fr) minmax(0, 3fr);
+      align-items: start;
+    }
+
+    .split .detail {
+      position: sticky;
+      inset-block-start: var(--space);
+    }
+  }
+
   .gate {
     display: grid;
     place-items: center;
@@ -320,6 +353,120 @@
     margin-block: 0;
   }
 
+  .panel h3 {
+    margin-block: 0.2rem 0;
+    font-size: 1.05rem;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+  }
+
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr));
+    gap: 0.75rem;
+    margin: 0.75rem 0 0;
+  }
+
+  .stats > div {
+    display: grid;
+    gap: 0.2rem;
+    align-content: start;
+    padding-block: 0.9rem;
+    padding-inline: 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow);
+  }
+
+  .stats dt {
+    color: var(--text-muted);
+    font-size: var(--step--1);
+  }
+
+  .stats dt a {
+    color: var(--brand);
+    text-underline-offset: 0.15em;
+  }
+
+  .stats dd {
+    margin: 0;
+    overflow-wrap: anywhere;
+    font-family: var(--font-display), Georgia, serif;
+    font-size: var(--step-1);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+  }
+
+  .stats dd[data-tone="ok"] {
+    color: var(--brand);
+  }
+
+  .stats dd[data-tone="wait"] {
+    color: var(--caution);
+  }
+
+  .stats dd[data-tone="bad"] {
+    color: var(--danger);
+  }
+
+  .stat-note {
+    display: block;
+    margin-block-start: 0.25rem;
+    color: var(--text-muted);
+    font-family: var(--font-sans), "Source Sans 3", "Segoe UI", sans-serif;
+    font-size: var(--step--1);
+    font-weight: 400;
+    letter-spacing: 0;
+  }
+
+  .chip {
+    display: inline-block;
+    border: 1px solid currentColor;
+    border-radius: 999px;
+    padding-block: 0.1rem;
+    padding-inline: 0.5rem;
+    font-family: var(--font-sans), "Source Sans 3", "Segoe UI", sans-serif;
+    font-size: 0.75rem;
+    font-weight: 650;
+    letter-spacing: 0.03em;
+    line-height: 1.4;
+    text-transform: uppercase;
+  }
+
+  .chip[data-tone="ok"] {
+    color: var(--brand);
+  }
+
+  .chip[data-tone="bad"] {
+    color: var(--danger);
+  }
+
+  .chip[data-tone="wait"] {
+    color: var(--caution);
+  }
+
+  details.section > summary {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 2.75rem;
+    font-family: var(--font-display), Georgia, serif;
+    font-size: var(--step-1);
+    font-weight: 560;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    cursor: pointer;
+  }
+
+  details.section > summary::marker {
+    color: var(--text-muted);
+  }
+
+  details.section > .board {
+    margin-block-start: 0.75rem;
+  }
+
   form > header,
   hgroup {
     display: grid;
@@ -401,7 +548,8 @@
   }
 
   @supports (corner-shape: squircle) {
-    .panel {
+    .panel,
+    .stats > div {
       corner-shape: squircle;
     }
   }
@@ -409,6 +557,10 @@
   @media (hover: hover) and (pointer: fine) {
     .masthead nav a:hover {
       border-block-end-color: var(--text);
+    }
+
+    .stats dt a:hover {
+      text-decoration: underline;
     }
 
     button:not(.quiet, :disabled):hover {
@@ -429,7 +581,9 @@
   @media (forced-colors: active) {
     button,
     .panel,
-    .status {
+    .status,
+    .stats > div,
+    .chip {
       border: 1px solid CanvasText;
     }
   }

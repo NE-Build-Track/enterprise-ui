@@ -65,6 +65,21 @@ export function feePositive(fees: Fees | null | undefined): boolean {
   return (eth !== null && eth.gt(0)) || (usd !== null && usd.gt(0));
 }
 
+const shortTime = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+/** A short local time for people. Callers keep the ISO string in `datetime`. */
+export function formatTime(iso: string | null | undefined): string {
+  if (iso === null || iso === undefined || iso === "") return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return shortTime.format(date);
+}
+
 export function defaultCostWindow(now: Date = new Date()): { start: string; end: string } {
   const end = now;
   const start = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);

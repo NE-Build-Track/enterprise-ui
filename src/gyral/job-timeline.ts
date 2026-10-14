@@ -1,7 +1,7 @@
 import { define, each, html, outputs, prop, type TemplateResult } from "@gyral/core";
 
 import type { Attempt, Job, JobCost } from "@/lib/engine/types";
-import { formatEth, formatUsd } from "@/lib/money";
+import { formatEth, formatTime, formatUsd } from "@/lib/money";
 
 import { isJob, isJobCost, orNull, sameJson } from "./guards";
 import { widgetStyles } from "./styles";
@@ -30,11 +30,17 @@ const AttemptRow = (attempt: Attempt): TemplateResult => html`
     <td>${attempt.number}</td>
     <td>${attempt.outcome}</td>
     <td>${attempt.orchestrator_url ?? ""}</td>
+    <td>${attempt.payment_sent ? "yes" : "no"}</td>
+    <td>${attempt.status_code ?? ""}</td>
+  </tr>
+`;
+
+const TechnicalRow = (attempt: Attempt): TemplateResult => html`
+  <tr>
+    <td>${attempt.number}</td>
     <td>${attempt.runner_url ?? ""}</td>
     <td>${attempt.manifest_id ?? ""}</td>
     <td>${attempt.auth_ids.join(", ")}</td>
-    <td>${attempt.payment_sent ? "yes" : "no"}</td>
-    <td>${attempt.status_code ?? ""}</td>
   </tr>
 `;
 
@@ -70,11 +76,16 @@ export const JobTimeline = define<State, Msg, Props, TimelineOutput>()("lp-job-t
     if (!job) return html`<p role="status">${ctx.props.error || "Select a job."}</p>`;
     const canReport = job.state === "succeeded" && job.usage === null;
     const tone = job.state === "succeeded" ? "ok" : job.state === "failed" ? "bad" : "wait";
+    const cost = ctx.props.cost;
+    const attemptLabel = job.attempts.length === 1 ? "attempt" : "attempts";
     return html`
       <p>
-        Job <code>${job.id}</code>
         <strong class="chip" data-tone=${tone}>${job.state}</strong>
+        ${cost ? html`${formatUsd(cost.fees.fee_usd)} · ${formatEth(cost.fees.fee_eth)}` : "Cost pending"}
+        across ${job.attempts.length} ${attemptLabel}. Created
+        <time datetime=${job.created_at}>${formatTime(job.created_at)}</time>.
       </p>
+      <p class="muted">Job <code>${job.id}</code></p>
       ${job.failure ? html`<p role="alert">${job.failure.kind}: ${job.failure.message}</p>` : ""}
       ${job.failure?.body ? html`<pre><samp>${job.failure.body}</samp></pre>` : ""}
       <table>
@@ -84,9 +95,6 @@ export const JobTimeline = define<State, Msg, Props, TimelineOutput>()("lp-job-t
             <th scope="col">#</th>
             <th scope="col">Outcome</th>
             <th scope="col">Orchestrator</th>
-            <th scope="col">Runner</th>
-            <th scope="col">Manifest</th>
-            <th scope="col">Auth ids</th>
             <th scope="col">Paid</th>
             <th scope="col">Status</th>
           </tr>
@@ -95,12 +103,33 @@ export const JobTimeline = define<State, Msg, Props, TimelineOutput>()("lp-job-t
           ${each(job.attempts, (attempt) => attempt.number, AttemptRow)}
         </tbody>
       </table>
-      ${costView(ctx.props.cost, job.attempts.length)}
+      ${
+        job.attempts.length > 0
+          ? html`<details>
+              <summary>Technical details</summary>
+              <table>
+                <caption>Runner, manifest, and auth for each attempt</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">#</th>
+                    <th scope="col">Runner</th>
+                    <th scope="col">Manifest</th>
+                    <th scope="col">Auth ids</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${each(job.attempts, (attempt) => attempt.number, TechnicalRow)}
+                </tbody>
+              </table>
+            </details>`
+          : ""
+      }
+      ${costView(cost)}
       ${
         job.usage
           ? html`<p>
               Usage <code>${job.usage.source}</code> at
-              <time datetime=${job.usage.reported_at}>${job.usage.reported_at}</time>:
+              <time datetime=${job.usage.reported_at}>${formatTime(job.usage.reported_at)}</time>:
               <code>${JSON.stringify(job.usage.quantities)}</code>
             </p>`
           : ""
@@ -121,21 +150,20 @@ export const JobTimeline = define<State, Msg, Props, TimelineOutput>()("lp-job-t
               </fieldset>
               ${s.formError || ctx.props.usageError ? html`<p role="alert">${s.formError || ctx.props.usageError}</p>` : ""}
             </form>`
-          : html`<p>Usage reporting waits for a succeeded job that has no usage yet.</p>`
+          : ""
       }
     `;
   },
 });
 
-function costView(cost: JobCost | null, attemptCount: number) {
-  if (!cost) return html`<p>Cost is pending.</p>`;
+function costView(cost: JobCost | null) {
+  if (!cost) return "";
   return html`
-    <p>
+    <p class="muted">
       Cost ${cost.status}. First observed
-      ${cost.first_observed_at ? html`<time datetime=${cost.first_observed_at}>${cost.first_observed_at}</time>` : "not yet"}.
-      Updated ${cost.updated_at ? html`<time datetime=${cost.updated_at}>${cost.updated_at}</time>` : "not yet"}.
+      ${cost.first_observed_at ? html`<time datetime=${cost.first_observed_at}>${formatTime(cost.first_observed_at)}</time>` : "not yet"}.
+      Updated ${cost.updated_at ? html`<time datetime=${cost.updated_at}>${formatTime(cost.updated_at)}</time>` : "not yet"}.
     </p>
-    <p>${formatUsd(cost.fees.fee_usd)} · ${formatEth(cost.fees.fee_eth)} across ${attemptCount} attempts.</p>
     <ul>
       ${cost.attempts.map(
         (attempt) =>

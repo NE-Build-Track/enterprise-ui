@@ -1,5 +1,6 @@
+import { renderToString } from "@gyral/core/internal/server";
 import { http } from "@gyral/http";
-import { inputsFor, outputsIn, step } from "@gyral/testing";
+import { inputsFor, outputsIn, step, viewOf } from "@gyral/testing";
 import { expect, it } from "vitest";
 
 import { BlockerChecklist } from "./blocker-checklist";
@@ -104,9 +105,57 @@ it("asks before revoking a key", () => {
 });
 
 it("emits a cost range from the inputs", () => {
-  const changed = step(CostBreakdown.spec, { start: "", end: "" }, { _tag: "Start", value: "2026-10-01T00:00:00.000Z" });
-  const applied = step(CostBreakdown.spec, changed.state, { _tag: "Apply" });
-  expect(outputsIn(applied.commands)).toEqual([{ _tag: "RangeChanged", start: "2026-10-01T00:00:00.000Z", end: "" }]);
+  const changed = step(CostBreakdown.spec, { start: "", end: "" }, { _tag: "Start", value: "2026-10-01" });
+  const ended = step(CostBreakdown.spec, changed.state, { _tag: "End", value: "2026-10-14" });
+  const applied = step(CostBreakdown.spec, ended.state, { _tag: "Apply" });
+  expect(outputsIn(applied.commands)).toEqual([
+    {
+      _tag: "RangeChanged",
+      start: new Date(2026, 9, 1, 0, 0, 0, 0).toISOString(),
+      end: new Date(2026, 9, 14, 23, 59, 59, 999).toISOString(),
+    },
+  ]);
+  const cleared = step(CostBreakdown.spec, ended.state, { _tag: "End", value: "" });
+  expect(cleared.state.end).toBe("");
+
+  const fees = { fee_usd: "1", fee_eth: "1", row_count: 1 };
+  const html = renderToString(
+    viewOf(
+      CostBreakdown,
+      { start: "2026-10-01T00:00:00.000Z", end: "2026-10-14T00:00:00.000Z" },
+      {
+        props: {
+          summary: {
+            by_class: {
+              delivered: { ...fees, fee_usd: "3" },
+              failed_after_payment: fees,
+              uncertain: { ...fees, fee_usd: "0" },
+              pending: { ...fees, fee_usd: "0" },
+            },
+            end: "2026-10-14T00:00:00.000Z",
+            jobs_pending: 1,
+            jobs_with_cost: 2,
+            start: "2026-10-01T00:00:00.000Z",
+          },
+          error: "",
+          start: "2026-10-01T00:00:00.000Z",
+          end: "2026-10-14T00:00:00.000Z",
+        },
+      },
+    ),
+    { dev: false },
+  );
+  expect(html).toContain('type="date"');
+  expect(html).toContain("bar wide");
+});
+
+it("names the retry action and opens the finished job", () => {
+  const html = renderToString(viewOf(JobRunner, runner, { props: { offerings: [] } }), { dev: false });
+  expect(html).toContain("Retry last job");
+  const viewed = step(JobRunner.spec, { ...runner, jobId: "job-1" }, { _tag: "View" });
+  expect(outputsIn(viewed.commands)).toEqual([
+    { _tag: "JobCompleted", jobId: "job-1", conflict: false, operationRef: "ref-1" },
+  ]);
 });
 
 it("refuses usage without a quantity", () => {

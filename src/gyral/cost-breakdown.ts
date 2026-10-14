@@ -1,7 +1,7 @@
 import { define, html, outputs, prop } from "@gyral/core";
 
 import { COST_CLASSES, type CostSummary } from "@/lib/engine/types";
-import { formatEth, formatUsd } from "@/lib/money";
+import { formatEth, formatUsd, percentWidth, sumDecimals } from "@/lib/money";
 
 import { isCostSummary, orNull, sameJson } from "./guards";
 import { widgetStyles } from "./styles";
@@ -27,6 +27,33 @@ type Msg = { readonly _tag: "Start"; readonly value: string } | { readonly _tag:
 
 const emit = outputs<CostOutput>();
 
+function dateInputValue(iso: string): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function isoDay(value: string, edge: "start" | "end"): string {
+  if (value === "") return "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const [year, month, day] = value.split("-").map(Number);
+  if (year === undefined || month === undefined || day === undefined) return "";
+  const date =
+    edge === "start" ? new Date(year, month - 1, day, 0, 0, 0, 0) : new Date(year, month - 1, day, 23, 59, 59, 999);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString();
+}
+
+function usdTotal(summary: CostSummary): string | null {
+  const amounts = COST_CLASSES.map((name) => summary.by_class[name]?.fee_usd);
+  if (amounts.some((amount) => amount === null || amount === undefined || amount === "")) return null;
+  const total = sumDecimals(amounts);
+  if (total === null || total === "0") return null;
+  return total;
+}
+
 const props = {
   summary: prop.value(orNull(isCostSummary), { default: null, equals: sameJson }),
   error: prop.string({ default: "" }),
@@ -44,16 +71,16 @@ export const CostBreakdown = define<State, Msg, Props, CostOutput>()("lp-cost-br
     Apply: true,
   },
   update: {
-    Start: (s, m) => ({ ...s, start: m.value }),
-    End: (s, m) => ({ ...s, end: m.value }),
+    Start: (s, m) => ({ ...s, start: isoDay(m.value, "start") }),
+    End: (s, m) => ({ ...s, end: isoDay(m.value, "end") }),
     Apply: (s) => [s, [emit({ _tag: "RangeChanged", start: s.start, end: s.end })]],
     PropsChanged: (s, m) => ({ ...s, start: m.props.start, end: m.props.end }),
   },
   view: (s, i, ctx) => html`
     <search>
       <form class="cluster" data-intent=${i.Apply}>
-        <label>Start <input type="text" value=${s.start} data-intent=${i.Start} spellcheck="false" /></label>
-        <label>End <input type="text" value=${s.end} data-intent=${i.End} spellcheck="false" /></label>
+        <label>Start <input type="date" value=${dateInputValue(s.start)} data-intent=${i.Start} /></label>
+        <label>End <input type="date" value=${dateInputValue(s.end)} data-intent=${i.End} /></label>
         <button type="submit">Apply range</button>
       </form>
     </search>
@@ -64,10 +91,19 @@ export const CostBreakdown = define<State, Msg, Props, CostOutput>()("lp-cost-br
 
 function summaryView(summary: CostSummary | null) {
   if (!summary) return html`<p role="status">No cost summary yet.</p>`;
+  const total = usdTotal(summary);
   return html`
-    <p>
-      ${summary.jobs_with_cost} jobs with cost, ${summary.jobs_pending} pending. Pending jobs stay beside the totals.
-    </p>
+    <p>${summary.jobs_with_cost} jobs with cost, ${summary.jobs_pending} pending.</p>
+    ${
+      total
+        ? html`<div class="bar wide" aria-hidden="true">
+            ${COST_CLASSES.map((name) => {
+              const width = percentWidth(summary.by_class[name]?.fee_usd, total);
+              return html`<span class=${name} style=${`--fill:${width}`}></span>`;
+            })}
+          </div>`
+        : ""
+    }
     <dl>
       ${COST_CLASSES.map(
         (name) => html`

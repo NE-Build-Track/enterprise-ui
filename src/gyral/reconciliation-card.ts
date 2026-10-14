@@ -31,7 +31,7 @@ export const ReconciliationCard = define<Stateless, never, Props>()("lp-reconcil
         <strong class="chip" data-tone=${tone}>${badge}</strong> <code>${row.allocation_id}</code>
       </p>
       <dl>
-        <dt>Batteries spent</dt>
+        <dt>Provider spent</dt>
         <dd>${formatMoney(row.provider_spent)}</dd>
         ${COST_CLASSES.map(
           (name) => html`
@@ -42,7 +42,7 @@ export const ReconciliationCard = define<Stateless, never, Props>()("lp-reconcil
         <dt>Unattributed</dt>
         <dd>${formatUsd(row.unattributed.fee_usd)} · ${formatEth(row.unattributed.fee_eth)}</dd>
       </dl>
-      <p>Balanced means Batteries spent equals delivered + failed after payment + uncertain + unattributed.</p>
+      ${row.balanced === false ? html`<p>Provider spend does not match the jobs we attributed it to.</p>` : ""}
     `;
   },
 });

@@ -203,9 +203,26 @@ export const widgetStyles = css`
 
       & > span {
         display: block;
+        flex: none;
         block-size: 100%;
         inline-size: var(--fill, 0%);
       }
+
+      &.wide {
+        inline-size: 100%;
+        margin-block: 0.5rem;
+      }
+    }
+
+    tr:has([aria-current="true"]) {
+      background: color-mix(in oklch, var(--brand, oklch(40% 0.09 170)) 14%, transparent);
+    }
+
+    .muted {
+      display: block;
+      color: var(--text-muted, oklch(46% 0.018 81));
+      font-size: 0.85rem;
+      overflow-wrap: anywhere;
     }
 
     .delivered {

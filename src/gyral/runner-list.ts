@@ -26,7 +26,9 @@ export const RunnerList = define<Stateless, never, Props>()("lp-runner-list", {
     ${ctx.props.error ? html`<p role="alert">${ctx.props.error}</p>` : ""}
     ${
       ctx.props.runners.length === 0
-        ? html`<p role="status">Choose an offering to list its orchestrators.</p>`
+        ? ctx.props.error
+          ? ""
+          : html`<p role="status">No runners for this offering.</p>`
         : html`<table>
             <caption>Orchestrators for the selected offering</caption>
             <thead>

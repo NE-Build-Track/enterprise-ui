@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 
-import { formatMoney, formatUsd, percentWidth, sameAmount, sumDecimals } from "./money";
+import { formatMoney, formatTime, formatUsd, percentWidth, sameAmount, sumDecimals } from "./money";
 
 it("keeps a missing amount pending and a null USD price unlabeled", () => {
   expect(formatMoney(null)).toBe("pending");
@@ -14,6 +14,21 @@ it("adds decimal strings and refuses to treat a missing price as zero", () => {
   expect(sumDecimals(["1", null])).toBeNull();
   expect(sameAmount("1.0", "1.00")).toBe(true);
   expect(sameAmount("1", null)).toBe(false);
+});
+
+it("formats an instant as a short local time", () => {
+  const iso = "2026-10-13T15:04:00.000Z";
+  expect(formatTime(iso)).toBe(
+    new Intl.DateTimeFormat(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }).format(new Date(iso)),
+  );
+  expect(formatTime("")).toBe("");
+  expect(formatTime(null)).toBe("");
+  expect(formatTime("not-a-date")).toBe("not-a-date");
 });
 
 it("builds bar widths from decimals", () => {

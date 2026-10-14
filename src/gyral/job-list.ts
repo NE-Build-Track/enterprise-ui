@@ -1,6 +1,7 @@
 import { define, each, html, outputs, prop, type TemplateResult } from "@gyral/core";
 
 import type { Job } from "@/lib/engine/types";
+import { formatTime } from "@/lib/money";
 
 import { isJob, listOf, sameJson } from "./guards";
 import { widgetStyles } from "./styles";
@@ -11,6 +12,12 @@ type Props = { readonly jobs: readonly Job[]; readonly error: string; readonly s
 type Msg = { readonly _tag: "Open"; readonly id: string };
 
 const emit = outputs<JobListOutput>();
+
+function stateTone(state: Job["state"]): "ok" | "bad" | "wait" {
+  if (state === "succeeded") return "ok";
+  if (state === "failed") return "bad";
+  return "wait";
+}
 
 const Row = (job: Job, selectedId: string): TemplateResult => html`
   <tr>
@@ -24,10 +31,10 @@ const Row = (job: Job, selectedId: string): TemplateResult => html`
       >
         ${job.app}
       </button>
+      ${job.operation_ref ? html`<span class="muted"><code>${job.operation_ref}</code></span>` : ""}
     </td>
-    <td>${job.state}</td>
-    <td>${job.operation_ref ? html`<code>${job.operation_ref}</code>` : ""}</td>
-    <td>${job.created_at ? html`<time datetime=${job.created_at}>${job.created_at}</time>` : ""}</td>
+    <td><strong class="chip" data-tone=${stateTone(job.state)}>${job.state}</strong></td>
+    <td>${job.created_at ? html`<time datetime=${job.created_at}>${formatTime(job.created_at)}</time>` : ""}</td>
   </tr>
 `;
 
@@ -45,27 +52,29 @@ export const JobList = define<{ readonly selectedId: string }, Msg, Props, JobLi
   update: {
     Open: (s, m) => [{ selectedId: m.id }, [emit({ _tag: "OpenJob", id: m.id })]],
   },
-  view: (_state, _intents, ctx) => html`
-    ${ctx.props.error ? html`<p role="alert">${ctx.props.error}</p>` : ""}
-    ${
-      ctx.props.jobs.length === 0
-        ? html`<p role="status">No jobs for this key yet.</p>`
-        : html`<table>
-            <caption>Jobs for this key</caption>
-            <thead>
-              <tr>
-                <th scope="col">App</th>
-                <th scope="col">State</th>
-                <th scope="col">Operation ref</th>
-                <th scope="col">Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${each(ctx.props.jobs, (job) => job.id, (job) => Row(job, ctx.props.selectedId))}
-            </tbody>
-          </table>`
-    }
-  `,
+  view: (_state, _intents, ctx) => {
+    const jobs = [...ctx.props.jobs].sort((left, right) => right.created_at.localeCompare(left.created_at));
+    return html`
+      ${ctx.props.error ? html`<p role="alert">${ctx.props.error}</p>` : ""}
+      ${
+        jobs.length === 0
+          ? html`<p role="status">No jobs for this key yet.</p>`
+          : html`<table>
+              <caption>Jobs for this key, newest first</caption>
+              <thead>
+                <tr>
+                  <th scope="col">App</th>
+                  <th scope="col">State</th>
+                  <th scope="col">Created</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${each(jobs, (job) => job.id, (job) => Row(job, ctx.props.selectedId))}
+              </tbody>
+            </table>`
+      }
+    `;
+  },
 });
 
 declare global {

@@ -56,7 +56,8 @@ type Msg =
   | { readonly _tag: "Submit"; readonly body: JobRequest }
   | { readonly _tag: "Finished"; readonly status: number; readonly contentType: string; readonly body: string; readonly jobId: string | null }
   | { readonly _tag: "Failed"; readonly status: number; readonly message: string; readonly jobId: string | null; readonly retryAfter: number | null; readonly conflict: boolean }
-  | { readonly _tag: "Tick" };
+  | { readonly _tag: "Tick" }
+  | { readonly _tag: "View" };
 
 const emit = outputs<JobRunnerOutput>();
 
@@ -161,6 +162,28 @@ function retrySeconds(value: unknown): number | null {
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
+function statusView(state: RunnerState, viewIntent: string) {
+  const countdown = state.countdown !== null && state.countdown > 0 ? `Retry after ${state.countdown}s.` : "";
+  const http = state.conflict
+    ? `Conflict ${state.httpStatus ?? ""}: the existing job was kept.`
+    : state.httpStatus
+      ? `HTTP ${state.httpStatus}.`
+      : "";
+  const running = state.phase === "running";
+  if (!running && !http && !state.jobId && !countdown) return "";
+  return html`
+    <div class="cluster">
+      <p role="status">
+        ${running ? "Running…" : ""}
+        ${http}
+        ${state.jobId ? html`Job <code>${state.jobId}</code>.` : ""}
+        ${countdown}
+      </p>
+      ${state.jobId ? html`<button type="button" class="quiet" data-intent=${viewIntent}>View job</button>` : ""}
+    </div>
+  `;
+}
+
 function completed(state: RunnerState, jobId: string | null, conflict: boolean) {
   return emit({ _tag: "JobCompleted", jobId, conflict, operationRef: state.operationRef });
 }
@@ -202,6 +225,7 @@ export const JobRunner = define<RunnerState, Msg, Props, JobRunnerOutput>()("lp-
     Model: ({ value }) => ({ _tag: "Model", value: value ?? "" }),
     Run: true,
     Retry: true,
+    View: true,
   },
   update: {
     App: (s, m, ctx) => {
@@ -225,6 +249,7 @@ export const JobRunner = define<RunnerState, Msg, Props, JobRunnerOutput>()("lp-
       if (!built.ok) return { ...s, error: built.message, phase: "failed" as const };
       return [{ ...s, phase: "running" as const, error: "", conflict: false, operationRef }, [post(built.value)]];
     },
+    View: (s) => [s, s.jobId ? [completed(s, s.jobId, s.conflict)] : []],
     Retry: (s) => {
       if (!s.operationRef.trim()) {
         return { ...s, error: "Run a job before retrying with the same operation ref.", phase: "failed" as const };
@@ -269,7 +294,6 @@ export const JobRunner = define<RunnerState, Msg, Props, JobRunnerOutput>()("lp-
     },
   },
   view: (s, i, ctx) => html`
-    <p>A failed payment is a result. Retrying with the same operation ref must not create a second job.</p>
     <form data-intent=${i.Run}>
       <label>
         Offering (required)
@@ -300,10 +324,13 @@ export const JobRunner = define<RunnerState, Msg, Props, JobRunnerOutput>()("lp-
           ? html`<p>Example inputs for this single-shot app. Replace placeholder URLs before you run it.</p>`
           : ""
       }
-      <label>
-        Operation ref
-        <input value=${s.operationRef} readonly placeholder="Assigned when you run" spellcheck="false" />
-      </label>
+      ${
+        s.operationRef
+          ? html`<label>
+              Operation ref <input value=${s.operationRef} readonly spellcheck="false" />
+            </label>`
+          : ""
+      }
       <details>
         <summary>Advanced</summary>
         <fieldset>
@@ -318,16 +345,13 @@ export const JobRunner = define<RunnerState, Msg, Props, JobRunnerOutput>()("lp-
       </details>
       <div class="cluster">
         <button type="submit" ?disabled=${s.phase === "running"}>Run job</button>
-        <button type="button" data-intent=${i.Retry} ?disabled=${s.phase === "running"}>Retry with same operation ref</button>
+        <button type="button" class="quiet" data-intent=${i.Retry} ?disabled=${s.phase === "running" || !s.operationRef}>
+          Retry last job
+        </button>
       </div>
+      <p class="muted">Retry last job sends the same request again instead of starting a new one.</p>
     </form>
-    <p role="status">
-      ${s.phase === "running" ? "Running…" : ""}
-      ${s.conflict ? `Conflict ${s.httpStatus}: the existing job was kept.` : ""}
-      ${s.countdown && s.countdown > 0 ? `Retry after ${s.countdown}s.` : ""}
-      ${s.httpStatus ? html`<abbr title="Hypertext Transfer Protocol">HTTP</abbr> ${s.httpStatus}.` : ""}
-      ${s.jobId ? html`Job <code>${s.jobId}</code>.` : ""}
-    </p>
+    ${statusView(s, i.View)}
     ${s.error ? html`<p role="alert">${s.error}</p>` : ""}
     ${
       s.resultBody
