@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 import { api } from "@/lib/client-api";
+import { isRecord } from "@/lib/engine/errors";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -21,7 +22,8 @@ export default function LoginPage() {
       setError(result.error);
       return;
     }
-    router.push("/dashboard");
+    const operator = isRecord(result.body) && result.body.role === "operator";
+    router.push(operator ? "/operator" : "/dashboard");
   }
 
   return (

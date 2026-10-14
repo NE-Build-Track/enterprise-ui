@@ -1,10 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { GyralElement } from "@/components/GyralElement";
 import { api } from "@/lib/client-api";
 import { isRecord } from "@/lib/engine/errors";
+import type { SessionRole } from "@/lib/session-token";
 import type { Allowance, CostSummary, Job, JobCost, Offering, Reconciliation, Runner } from "@/lib/engine/types";
 import { defaultCostWindow } from "@/lib/money";
 import {
@@ -31,7 +33,7 @@ const isJobs = listOf(isJob);
 const isOfferings = listOf(isOffering);
 const isRunners = listOf(isRunner);
 
-export function Dashboard({ actorId }: { readonly actorId: string | null }) {
+export function Dashboard({ actorId, role }: { readonly actorId: string | null; readonly role: SessionRole }) {
   const window = useMemo(() => defaultCostWindow(), []);
   const [start, setStart] = useState(window.start);
   const [end, setEnd] = useState(window.end);
@@ -152,6 +154,12 @@ export function Dashboard({ actorId }: { readonly actorId: string | null }) {
         <h1>Dashboard</h1>
         <p>
           Allowance, costs, runners, and jobs for <bdi>{actorId ?? "this key"}</bdi>.
+          {role === "operator" && !actorId ? (
+            <>
+              {" "}
+              <Link href="/operator">Provision an actor</Link> on the operator desk, then sign in with the key it issues.
+            </>
+          ) : null}
         </p>
       </hgroup>
       <div className="board">

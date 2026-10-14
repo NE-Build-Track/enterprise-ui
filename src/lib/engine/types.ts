@@ -15,6 +15,7 @@ export type JobRequest = Schemas["JobRequest"];
 export type Offering = Schemas["Offering"];
 export type Runner = Schemas["Runner"];
 export type Reconciliation = Schemas["Reconciliation"];
+export type ProvisionedActor = Schemas["ProvisionedActor"];
 export type SyncReport = Schemas["SyncReport"];
 export type Attempt = Schemas["Attempt"];
 export type NetworkRate = Schemas["NetworkRate"];

@@ -2,7 +2,7 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, expect, it } from "vitest";
 
-import { readyz, reservedProbes, runJob } from "./api";
+import { provisionActor, readyz, reservedProbes, runJob } from "./api";
 import { createEngineCall } from "./client";
 import { EngineRequestError } from "./errors";
 
@@ -56,6 +56,44 @@ it("keeps the runner body and the job id header", async () => {
     timeout_s: 30,
   });
   expect(run).toMatchObject({ status: 200, body: "not json", jobId: "job-9", contentType: "text/plain" });
+});
+
+it("provisions an actor allocation in USD", async () => {
+  let body: unknown;
+  server.use(
+    http.post(
+      "http://engine.test/v1/admin/applications/:application/actors/:actor/allocation",
+      async ({ request, params }) => {
+        body = await request.json();
+        expect(params.application).toBe("default");
+        expect(params.actor).toBe("ada");
+        return HttpResponse.json(
+          {
+            application_id: "default",
+            actor_id: "ada",
+            grant_id: "grant",
+            allocation_id: "alloc",
+            api_key_id: "pay",
+            secret_ref: { ref: "db:1" },
+            currency: "USD",
+            status: "active",
+            created_at: "2026-10-14T00:00:00Z",
+            updated_at: "2026-10-14T00:00:00Z",
+          },
+          { status: 201 },
+        );
+      },
+    ),
+  );
+  const actor = await provisionActor(call(), {
+    applicationId: "default",
+    actorId: "ada",
+    amount: "1",
+    label: "ada",
+  });
+  expect(body).toEqual({ amount: { amount: "1", currency: "USD" }, label: "ada" });
+  expect(actor.allocation_id).toBe("alloc");
+  expect(actor.status).toBe("active");
 });
 
 it("maps a reserved 501 onto milestone and ticket", async () => {

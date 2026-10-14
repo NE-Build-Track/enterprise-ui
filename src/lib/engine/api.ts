@@ -11,6 +11,7 @@ import type {
   JobCost,
   JobRequest,
   Offering,
+  ProvisionedActor,
   Reconciliation,
   Runner,
   SyncReport,
@@ -188,6 +189,82 @@ export async function revokeKey(call: EngineCall, keyId: string): Promise<void> 
   await unwrap(result);
 }
 
+export type AllocationTarget = {
+  readonly applicationId: string;
+  readonly actorId: string;
+};
+
+function allocationParams(target: AllocationTarget) {
+  return { path: { application_id: target.applicationId, actor_id: target.actorId } };
+}
+
+export async function provisionActor(
+  call: EngineCall,
+  target: AllocationTarget & { readonly amount: string; readonly label: string },
+): Promise<ProvisionedActor> {
+  const result = await call.client.POST(
+    "/v1/admin/applications/{application_id}/actors/{actor_id}/allocation",
+    {
+      params: allocationParams(target),
+      body: { amount: { amount: target.amount, currency: "USD" }, label: target.label },
+    },
+  );
+  return unwrap(result);
+}
+
+export async function fundAllocation(
+  call: EngineCall,
+  target: AllocationTarget & { readonly amount: string; readonly operationRef: string },
+): Promise<ProvisionedActor> {
+  const result = await call.client.POST(
+    "/v1/admin/applications/{application_id}/actors/{actor_id}/allocation/fund",
+    {
+      params: allocationParams(target),
+      body: {
+        amount: { amount: target.amount, currency: "USD" },
+        operation_ref: target.operationRef,
+      },
+    },
+  );
+  return unwrap(result);
+}
+
+export async function setAllocationStatus(
+  call: EngineCall,
+  target: AllocationTarget & { readonly status: "active" | "paused" },
+): Promise<ProvisionedActor> {
+  const result = await call.client.POST(
+    "/v1/admin/applications/{application_id}/actors/{actor_id}/allocation/status",
+    {
+      params: allocationParams(target),
+      body: { status: target.status },
+    },
+  );
+  return unwrap(result);
+}
+
+export async function revokeAllocation(call: EngineCall, target: AllocationTarget): Promise<ProvisionedActor> {
+  const result = await call.client.POST(
+    "/v1/admin/applications/{application_id}/actors/{actor_id}/allocation/revoke",
+    { params: allocationParams(target) },
+  );
+  return unwrap(result);
+}
+
+export async function rotateAllocationKey(
+  call: EngineCall,
+  target: AllocationTarget & { readonly operationRef: string },
+): Promise<ProvisionedActor> {
+  const result = await call.client.POST(
+    "/v1/admin/applications/{application_id}/actors/{actor_id}/allocation/rotate-key",
+    {
+      params: allocationParams(target),
+      body: { operation_ref: target.operationRef },
+    },
+  );
+  return unwrap(result);
+}
+
 export async function reconcile(
   call: EngineCall,
   query: { applicationId?: string; actorId?: string },
@@ -247,7 +324,7 @@ async function capture(route: string, work: Promise<unknown>): Promise<ReservedP
 }
 
 /**
- * Every non-application engine route this app calls.
+ * Every engine route this app calls.
  * `src/lib/engine/coverage.test.ts` fails when openapi.json grows a route that is missing here.
  */
 export const engineHandlers = {
@@ -266,10 +343,13 @@ export const engineHandlers = {
   "GET /v1/admin/keys": listKeys,
   "POST /v1/admin/keys": issueKey,
   "POST /v1/admin/keys/{key_id}/revoke": revokeKey,
+  "POST /v1/admin/applications/{application_id}/actors/{actor_id}/allocation": provisionActor,
+  "POST /v1/admin/applications/{application_id}/actors/{actor_id}/allocation/fund": fundAllocation,
+  "POST /v1/admin/applications/{application_id}/actors/{actor_id}/allocation/status": setAllocationStatus,
+  "POST /v1/admin/applications/{application_id}/actors/{actor_id}/allocation/revoke": revokeAllocation,
+  "POST /v1/admin/applications/{application_id}/actors/{actor_id}/allocation/rotate-key": rotateAllocationKey,
   "GET /v1/admin/reconciliation": reconcile,
   "POST /v1/admin/costs/sync": syncCosts,
   "GET /v1/events": events,
   "POST /v1/sessions": openSession,
 } as const;
-
-export const DEFERRED_ROUTE_PREFIX = "/v1/admin/applications/";

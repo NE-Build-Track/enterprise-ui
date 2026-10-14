@@ -18,7 +18,10 @@ export async function POST(request: Request): Promise<Response> {
     const token = form ? await tokenFromForm(request) : await tokenFromJson(request);
     const login = await authenticateKey(engineUrl(), token);
     await writeSession(login);
-    if (form) return NextResponse.redirect(new URL("/dashboard", request.url), 303);
+    if (form) {
+      const path = login.role === "operator" ? "/operator" : "/dashboard";
+      return NextResponse.redirect(new URL(path, request.url), 303);
+    }
     return Response.json({
       role: login.role,
       actorId: login.actorId,

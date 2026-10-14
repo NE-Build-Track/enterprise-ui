@@ -6,7 +6,7 @@ import { GyralElement } from "@/components/GyralElement";
 import { api } from "@/lib/client-api";
 import type { ActorSnapshot } from "@/lib/attribution";
 import { isRecord } from "@/lib/engine/errors";
-import type { AccessKey, Job, JobCost, SyncReport } from "@/lib/engine/types";
+import type { AccessKey, Job, JobCost, ProvisionedActor, SyncReport } from "@/lib/engine/types";
 import { isAccessKey, isActorSnapshot, isJob, isJobCost, listOf } from "@/gyral/guards";
 import { loadActorTable, loadJobTimeline, loadKeyTable } from "@/gyral/loaders";
 
@@ -21,6 +21,13 @@ export function OperatorDesk() {
   const [issued, setIssued] = useState<{ token: string; actorId: string } | null>(null);
   const [sync, setSync] = useState<SyncReport | null>(null);
   const [selected, setSelected] = useState<{ job: Job; cost: JobCost | null } | null>(null);
+  const [actorId, setActorId] = useState("");
+  const [amount, setAmount] = useState("1");
+  const [label, setLabel] = useState("");
+  const [fundAmount, setFundAmount] = useState("1");
+  const [allocation, setAllocation] = useState<ProvisionedActor | null>(null);
+  const [allocationError, setAllocationError] = useState("");
+  const [confirmRevoke, setConfirmRevoke] = useState(false);
 
   const refresh = useCallback(async () => {
     const [keyResult, actorResult] = await Promise.all([api("/api/operator/keys"), api("/api/operator/actors")]);
@@ -80,6 +87,26 @@ export function OperatorDesk() {
     });
   }, []);
 
+  async function allocationCommand(
+    action: "provision" | "fund" | "pause" | "resume" | "revoke" | "rotate",
+    payload: { actorId: string; amount?: string; label?: string },
+  ): Promise<void> {
+    const result = await api("/api/operator/allocations", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action, ...payload }),
+    });
+    if (!result.ok || !isProvisioned(result.body)) {
+      setAllocationError(result.ok ? "The engine did not return an allocation." : result.error);
+      return;
+    }
+    setAllocation(result.body);
+    setActorId(result.body.actor_id);
+    setAllocationError("");
+    setConfirmRevoke(false);
+    await refresh();
+  }
+
   async function syncCosts(): Promise<void> {
     const result = await api("/api/operator/sync", { method: "POST" });
     if (!result.ok || !isRecord(result.body) || typeof result.body.pages !== "number") {
@@ -99,9 +126,67 @@ export function OperatorDesk() {
     <>
       <hgroup>
         <h1>Operator</h1>
-        <p>Every actor on the shared grant, plus key issue, revoke, and cost sync.</p>
+        <p>Provision an allocation, issue that actor a key, then compare spend.</p>
       </hgroup>
       <div className="board">
+        <article className="panel wide">
+          <h2>Allocations</h2>
+          <p>The actor id is the name you choose. Provisioning draws from the shared grant and does not create a login key.</p>
+          <form
+            className="cluster"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void allocationCommand("provision", { actorId, amount, label });
+            }}
+          >
+            <label>
+              Actor id (required)
+              <input value={actorId} onChange={(event) => setActorId(event.target.value)} required autoComplete="off" spellCheck={false} />
+            </label>
+            <label>
+              Amount USD (required)
+              <input value={amount} onChange={(event) => setAmount(event.target.value)} inputMode="decimal" required autoComplete="off" />
+            </label>
+            <label>
+              Label (optional)
+              <input value={label} onChange={(event) => setLabel(event.target.value)} autoComplete="off" />
+            </label>
+            <button type="submit">Provision</button>
+          </form>
+          {allocationError ? <p role="alert">{allocationError}</p> : null}
+          {allocation ? (
+            <p role="status">
+              <bdi>{allocation.actor_id}</bdi> allocation <code>{allocation.allocation_id}</code> is {allocation.status}. Issue an actor key for this id, then sign in with that key.
+            </p>
+          ) : null}
+          <div className="cluster">
+            <label>
+              Add USD
+              <input value={fundAmount} onChange={(event) => setFundAmount(event.target.value)} inputMode="decimal" autoComplete="off" />
+            </label>
+            <button type="button" onClick={() => void allocationCommand("fund", { actorId, amount: fundAmount })}>
+              Fund
+            </button>
+            <button type="button" className="quiet" onClick={() => void allocationCommand("pause", { actorId })}>
+              Pause
+            </button>
+            <button type="button" className="quiet" onClick={() => void allocationCommand("resume", { actorId })}>
+              Resume
+            </button>
+            <button type="button" className="quiet" onClick={() => void allocationCommand("rotate", { actorId })}>
+              Rotate payment key
+            </button>
+            {confirmRevoke ? (
+              <button type="button" onClick={() => void allocationCommand("revoke", { actorId })}>
+                Confirm revoke
+              </button>
+            ) : (
+              <button type="button" className="quiet" onClick={() => setConfirmRevoke(true)}>
+                Revoke
+              </button>
+            )}
+          </div>
+        </article>
         <article className="panel wide">
           <h2>Cost sync</h2>
           <div className="cluster">
@@ -114,7 +199,6 @@ export function OperatorDesk() {
               </output>
             ) : null}
           </div>
-          <p className="note">Fund, pause, rotate, and revoke for allocations stay on the engine until those routes are ready.</p>
         </article>
         <article className="panel wide">
           <h2>Spend by actor</h2>
@@ -141,5 +225,14 @@ export function OperatorDesk() {
         </article>
       </div>
     </>
+  );
+}
+
+function isProvisioned(value: unknown): value is ProvisionedActor {
+  return (
+    isRecord(value) &&
+    typeof value.actor_id === "string" &&
+    typeof value.allocation_id === "string" &&
+    typeof value.status === "string"
   );
 }

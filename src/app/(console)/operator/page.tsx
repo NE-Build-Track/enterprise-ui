@@ -5,7 +5,7 @@ import { requirePageSession } from "@/lib/page-session";
 
 export const metadata: Metadata = {
   title: "Operator",
-  description: "Compare every actor's allowance and reconciliation, issue or revoke keys, and sync costs.",
+  description: "Provision allocations, issue or revoke keys, and compare every actor.",
 };
 
 export default async function OperatorPage() {

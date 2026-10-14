@@ -10,5 +10,5 @@ export const metadata: Metadata = {
 
 export default async function DashboardPage() {
   const session = await requirePageSession();
-  return <Dashboard actorId={session.actorId} />;
+  return <Dashboard actorId={session.actorId} role={session.role} />;
 }

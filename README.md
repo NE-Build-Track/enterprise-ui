@@ -2,7 +2,7 @@
 
 A Next.js demo of per-actor usage attribution against a [livepeer-builder](https://github.com/mikezupper/livepeer-builder-core) engine. Users sign in with an engine `lpk_` actor key. The server holds the admin token and uses it for provisioning checks, reconciliation, and key management. Widgets are [Gyral](https://gyral.dev/docs/getting-started/) custom elements.
 
-The engine stays single-tenant. Every actor allocation comes from one pre-created grant. This app does not call the allocation command routes.
+The engine stays single-tenant. Every actor allocation comes from one pre-created grant. An admin provisions that allocation from the Operator page.
 
 ## Run it
 
@@ -20,12 +20,12 @@ npm run dev
 | `SESSION_SECRET` | Encrypts the session cookie |
 | `SIGNUP_INVITE_CODE` | Enables `/signup`. Leave empty to disable it |
 
-Create at least two actor allocations on the shared grant (Swagger `POST /v1/admin/applications/{application}/actors/{actor}/allocation`) before comparing actors. Signup and the operator key form then issue an `lpk_` key for an actor that already has an allocation. The key is shown once.
+Sign in with the admin key. Operator provisions an allocation for an actor id, then issues an `lpk_` key for that actor. The key is shown once. Sign in with it to see that actor's reconciliation.
 
 ## What the pages show
 
 - **Dashboard.** Allowance, cost classes, offerings, runners, jobs, the inline runner result, usage reporting, and this actor's reconciliation.
-- **Operator.** Every actor's allowance, summary, and reconciliation, key issue and revoke, cost sync, and a job lookup. An admin can read any job by id. `GET /v1/jobs` only lists the caller's own jobs.
+- **Operator.** Provision, fund, pause, and revoke allocations, then issue or revoke keys. Also every actor's allowance, summary, and reconciliation, cost sync, and a job lookup. An admin can read any job by id. `GET /v1/jobs` only lists the caller's own jobs.
 - **ISS-04.** Health against the pinned SDK and engine commits, the T9 balanced check, a one-attempt probe per offering, unattributed and failed-after-payment totals, a repeat-`operation_ref` check, the reserved 501 routes, and an evidence download.
 
 A job can spend from the signed-in actor's allocation if an orchestrator accepts payment. The T10 probe asks before it runs and uses `max_attempts: 1`.
