@@ -1,0 +1,38 @@
+{
+  "name": "enterprise-ui",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "gen:api": "openapi-typescript openapi/engine.openapi.json -o src/lib/engine/schema.d.ts"
+  },
+  "dependencies": {
+    "@gyral/core": "^0.3.4",
+    "@gyral/http": "^0.3.4",
+    "decimal.js-light": "^2.5.1",
+    "jose": "^6.2.12",
+    "next": "16.4.0",
+    "openapi-fetch": "^0.17.0",
+    "openapi-typescript": "^7.13.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@gyral/testing": "^0.3.4",
+    "@gyral/time": "^0.3.4",
+    "@types/node": "^24.19.2",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.4.0",
+    "msw": "^2.15.0",
+    "typescript": "^5",
+    "vitest": "^4.1.11"
+  }
+}

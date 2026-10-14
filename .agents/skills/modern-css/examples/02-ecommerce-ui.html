@@ -1,0 +1,1391 @@
+<!doctype html>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+  NORTHLINE SUPPLY — a modern-CSS ecommerce storefront demo
+  One self-contained file. Zero external resources, zero frameworks, and
+  ~30 lines of JS used only where the platform has no declarative path.
+  Built with the "modern-css" skill: @layer architecture, oklch tokens,
+  light-dark() theming, logical properties, fluid type, CSS-first state.
+
+  Modern CSS features demonstrated (tiers per references/feature-support.md):
+  • @layer cascade layers (A) — reset / tokens / base / layout / components / utilities
+  • oklch() + relative color syntax (A/B) — entire palette derived from --hue tokens
+  • color-mix(in oklch) (A) — hue-tinted neutrals, borders, sale tints, skeleton shine
+  • light-dark() + color-scheme (B) — both themes from one token set, no duplicates
+  • contrast-color() (B, @supports-guarded) — text on brand surfaces
+  • @property typed tokens (B) — registered --hue
+  • Logical properties everywhere (A) — inline-size, padding-block, inset-inline-end,
+    border-start-start-radius, margin-block-start…
+  • Fluid type & space scales via clamp() (A); lh-relative rhythm (A)
+  • text-wrap: balance / pretty (B)
+  • Container queries + cqi units (A) — product cards reflow internally by card width
+  • Container style queries @container style(--variant: sale) (B) — variant skins
+    with graceful class/badge fallback
+  • :has() (A) — checkbox/radio filter bar dims & highlights the grid, pill styling,
+    empty-cart state — all pure CSS state
+  • <dialog> + ::backdrop (A) — product quick-view modal and cart drawer
+  • @starting-style + transition-behavior: allow-discrete (B) — animated open AND
+    close of dialogs/popovers, including the `overlay` property
+  • Popover API with implicit anchor from popovertarget (B) — size-guide tooltip
+  • Anchor positioning: position-area + position-try-fallbacks (B, @supports-guarded
+    so unsupported engines keep the centered UA fallback)
+  • dialog closedby="any" light dismiss (C — harmless fallback: Esc still closes)
+  • Scroll snap (A) — "Recently viewed" row; overscroll-behavior: contain (A) in
+    the cart drawer and snap row
+  • aspect-ratio (A), overflow: clip (A), dvh units (A), env(safe-area-inset-*) (A)
+  • Skeleton shimmer from the recipes (A) — color-mix gradient, no layout shift
+  • mix-blend-mode pattern overlays on oklch-gradient product art (A)
+  • background-clip: text (A) — gradient headline + fractional star ratings
+  • @media (hover: hover) and (pointer: fine) gating (A); touch-action: manipulation (A)
+  • :focus-visible (A); accent-color, scrollbar-color, ::selection (A)
+  • content-visibility: auto + contain-intrinsic-size (A) — below-fold sections
+  • @container scroll-state(stuck) sticky-header shadow (C, @supports-guarded)
+  • sibling-index() entrance stagger (C, @supports + :nth-child fallback)
+  • corner-shape: squircle (C, @supports-guarded)
+  • prefers-reduced-motion kill switch; motion-gated smooth scrolling
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Northline Supply — Field-tested gear</title>
+<style>
+/* 1 ── Layer order up front: later layers always win. */
+@layer reset, tokens, base, layout, components, utilities;
+
+/* 2 ── Reset */
+@layer reset {
+  *, *::before, *::after { box-sizing: border-box; }
+  * { margin: 0; }
+  img, picture, video, canvas, svg { display: block; max-inline-size: 100%; }
+  input, button, textarea, select { font: inherit; }
+  p, h1, h2, h3, h4 { overflow-wrap: break-word; }
+  ul[class], ol[class] { list-style: none; padding: 0; }
+  fieldset { border: 0; padding: 0; min-inline-size: 0; }
+}
+
+/* 3 ── Tokens: one hue in, the whole theme out. */
+@layer tokens {
+  :root {
+    color-scheme: light dark;
+
+    /* Perceptual color system — brand hue + derived hue-tinted neutrals. */
+    --hue: 232;                                  /* northline steel blue  */
+    --brand: oklch(56% 0.16 var(--hue));
+    --brand-hover: oklch(from var(--brand) calc(l - 0.07) c h);
+    --brand-subtle: color-mix(in oklch, var(--brand) 10%, var(--surface));
+    --on-brand: oklch(98% 0.01 var(--hue));      /* manual fallback…      */
+
+    --sale: light-dark(oklch(56% 0.19 27), oklch(70% 0.17 27));
+    --star: light-dark(oklch(72% 0.14 80), oklch(80% 0.13 84));
+
+    --surface:        light-dark(oklch(98.5% 0.006 var(--hue)), oklch(17% 0.016 var(--hue)));
+    --surface-raised: light-dark(oklch(100% 0 0),               oklch(22% 0.02 var(--hue)));
+    --text:           light-dark(oklch(23% 0.025 var(--hue)),   oklch(93% 0.012 var(--hue)));
+    --text-muted:     color-mix(in oklch, var(--text) 62%, var(--surface));
+    --border:         color-mix(in oklch, var(--text) 13%, var(--surface));
+
+    /* Fluid space & type. */
+    --space:   clamp(1rem, 0.55rem + 1.5vw, 1.5rem);
+    --space-s: calc(var(--space) / 2);
+    --step--1: clamp(0.83rem, 0.8rem + 0.15vw, 0.9rem);
+    --step-0:  clamp(0.97rem, 0.93rem + 0.2vw, 1.06rem);
+    --step-1:  clamp(1.2rem, 1.1rem + 0.5vw, 1.45rem);
+    --step-2:  clamp(1.5rem, 1.32rem + 0.9vw, 1.95rem);
+    --step-3:  clamp(1.95rem, 1.6rem + 1.75vw, 2.8rem);
+
+    --radius: 14px;
+    --radius-s: calc(var(--radius) / 2);
+    --shadow: 0 1px 2px oklch(20% 0.03 var(--hue) / 0.08),
+              0 10px 28px oklch(20% 0.03 var(--hue) / 0.12);
+    --shadow-high: 0 2px 6px oklch(18% 0.03 var(--hue) / 0.16),
+                   0 24px 64px oklch(18% 0.03 var(--hue) / 0.28);
+  }
+
+  /* Typed token (Tier B): registered so tooling/animation treat it as a number. */
+  @property --hue { syntax: "<number>"; inherits: true; initial-value: 232; }
+
+  /* Tier B enhancement: let the browser pick readable text over brand. */
+  @supports (color: contrast-color(red)) {
+    :root { --on-brand: contrast-color(var(--brand)); }
+  }
+}
+
+/* 4 ── Base */
+@layer base {
+  body {
+    background: var(--surface);
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+    font-size: var(--step-0);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    accent-color: var(--brand);
+    scrollbar-color: var(--border) transparent;
+  }
+  h1, h2, h3 { text-wrap: balance; line-height: 1.12; letter-spacing: -0.015em; }
+  p, li, figcaption { text-wrap: pretty; }
+  a { color: inherit; text-decoration: none; }
+  button { cursor: pointer; touch-action: manipulation; color: inherit; }
+  :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 4px; }
+  ::selection { background: var(--brand); color: var(--on-brand); }
+  @media (prefers-reduced-motion: no-preference) {
+    html { scroll-behavior: smooth; }
+  }
+}
+
+/* 5 ── Layout */
+@layer layout {
+  /* Breakout page scaffold (recipe 1). */
+  .page {
+    display: grid;
+    grid-template-columns:
+      [full-start] minmax(var(--space), 1fr)
+      [content-start] min(100% - 2 * var(--space), 72rem) [content-end]
+      minmax(var(--space), 1fr) [full-end];
+    row-gap: calc(var(--space) * 2);
+    padding-block: calc(var(--space) * 1.5) calc(var(--space) * 3);
+  }
+  .page > * { grid-column: content; }
+  .page > .full-bleed { grid-column: full; }
+
+  /* Sticky header; scroll-state container so it can know it's stuck (Tier C). */
+  .header-wrap {
+    position: sticky;
+    inset-block-start: 0;
+    z-index: 20;
+    container-type: scroll-state;
+  }
+  .site-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space);
+    padding-block: 0.7rem;
+    padding-inline: max(var(--space), env(safe-area-inset-left))
+                    max(var(--space), env(safe-area-inset-right));
+    background: color-mix(in oklch, var(--surface) 82%, transparent);
+    backdrop-filter: blur(12px);
+    border-block-end: 1px solid var(--border);
+    transition: box-shadow 0.3s;
+  }
+  .site-header nav {
+    display: flex;
+    gap: clamp(0.75rem, 2vw, 1.5rem);
+    font-size: var(--step--1);
+    color: var(--text-muted);
+  }
+  .site-header .cart-btn { margin-inline-start: auto; }
+  @supports (container-type: scroll-state) {
+    @container scroll-state(stuck: top) {
+      .site-header { box-shadow: var(--shadow); }
+    }
+  }
+
+  /* Product grid — component containers respond to their own width, not the page. */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(17rem, 100%), 1fr));
+    gap: var(--space);
+  }
+  .product { container: card / inline-size; }
+
+  /* Recently-viewed scroll-snap row (recipe 9 base). */
+  .snap-row {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: clamp(9rem, 30cqi, 11rem);
+    gap: var(--space);
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: var(--space-s);
+    padding-block-end: var(--space-s);
+    scrollbar-width: thin;
+  }
+  .snap-row > * { scroll-snap-align: start; }
+
+  /* Long-page rendering perf on below-fold sections. */
+  .below-fold { content-visibility: auto; contain-intrinsic-size: auto 22rem; }
+
+  .section-head {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space);
+    margin-block-end: var(--space);
+  }
+  .section-head h2 { font-size: var(--step-1); }
+  .section-head .aside { margin-inline-start: auto; font-size: var(--step--1); color: var(--text-muted); }
+}
+
+/* 6 ── Components */
+@layer components {
+
+  /* ── Brand / hero ─────────────────────────────────────────────────── */
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+  }
+  .logo svg { inline-size: 1.4rem; color: var(--brand); }
+
+  .hero { max-inline-size: 46rem; }
+  .hero .kicker {
+    font-size: var(--step--1);
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--brand);
+  }
+  .hero h1 { font-size: var(--step-3); margin-block: 0.35rem 0.6rem; }
+  .hero h1 .grad {
+    background: linear-gradient(92deg in oklch,
+      var(--brand), oklch(from var(--brand) calc(l + 0.12) calc(c + 0.03) calc(h - 55)));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .hero p { color: var(--text-muted); max-inline-size: 52ch; }
+
+  /* ── Buttons ──────────────────────────────────────────────────────── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-block-size: 2.75rem;
+    padding-block: 0.55rem;
+    padding-inline: 1.1rem;
+    border: 1px solid transparent;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: var(--step--1);
+    background: var(--brand);
+    color: var(--on-brand);
+    transition: background-color 0.15s, border-color 0.15s, translate 0.15s;
+  }
+  .btn:hover { background: var(--brand-hover); }
+  .btn:active { translate: 0 1px; }
+  .btn.ghost {
+    background: transparent;
+    color: var(--text);
+    border-color: var(--border);
+  }
+  .btn.ghost:hover { border-color: color-mix(in oklch, var(--text) 35%, var(--surface)); background: transparent; }
+
+  .cart-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-block-size: 2.75rem;
+    padding-inline: 1rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface-raised);
+    font-weight: 600;
+    font-size: var(--step--1);
+    transition: border-color 0.15s;
+  }
+  .cart-btn:hover { border-color: var(--brand); }
+  .cart-btn svg { inline-size: 1.1rem; }
+  .cart-btn .count {
+    display: inline-grid;
+    place-content: center;
+    min-inline-size: 1.4rem;
+    block-size: 1.4rem;
+    padding-inline: 0.25rem;
+    border-radius: 999px;
+    background: var(--brand);
+    color: var(--on-brand);
+    font-size: 0.72rem;
+  }
+
+  /* ── Filter bar: pure CSS state via :has() ─────────────────────────── */
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-s) var(--space);
+    margin-block-end: var(--space);
+  }
+  .filters fieldset { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  .filters .divider {
+    inline-size: 1px;
+    align-self: stretch;
+    background: var(--border);
+  }
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    min-block-size: 2.4rem;
+    padding-inline: 0.95rem;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface-raised);
+    font-size: var(--step--1);
+    font-weight: 550;
+    color: var(--text-muted);
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .pill:hover { border-color: color-mix(in oklch, var(--text) 30%, var(--surface)); }
+  .pill:has(input:checked) {
+    background: var(--brand);
+    border-color: transparent;
+    color: var(--on-brand);
+  }
+  .pill.sale-pill:has(input:checked) { background: var(--sale); }
+  .pill:has(input:focus-visible) { outline: 2px solid var(--brand); outline-offset: 2px; }
+  .pill .dot {
+    inline-size: 0.5rem;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.55;
+  }
+
+  /* Checking "Sale"/"New" or a category radio restyles the grid — no JS. */
+  .shop:has(#f-sale:checked)    .product:not([data-sale]),
+  .shop:has(#f-new:checked)     .product:not([data-new]),
+  .shop:has(#c-packs:checked)   .product:not([data-cat="packs"]),
+  .shop:has(#c-apparel:checked) .product:not([data-cat="apparel"]),
+  .shop:has(#c-acc:checked)     .product:not([data-cat="accessories"]) {
+    opacity: 0.28;
+    filter: grayscale(0.75) saturate(0.5);
+    scale: 0.97;
+  }
+  .shop:has(#f-sale:checked) .product[data-sale] > .card {
+    outline: 2px solid color-mix(in oklch, var(--sale) 70%, transparent);
+    outline-offset: 3px;
+  }
+  .shop:has(#f-new:checked) .product[data-new] > .card {
+    outline: 2px solid color-mix(in oklch, var(--brand) 70%, transparent);
+    outline-offset: 3px;
+  }
+  .product { transition: opacity 0.3s, filter 0.3s, scale 0.3s; }
+
+  /* ── Product card ─────────────────────────────────────────────────── */
+  .card {
+    display: flex;
+    flex-direction: column;
+    block-size: 100%;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    overflow: clip;
+    transition: translate 0.2s ease-out, box-shadow 0.2s ease-out, border-color 0.2s;
+  }
+
+  /* Gradient product art — oklch gradients + blend-mode pinstripe texture. */
+  .art {
+    position: relative;
+    display: grid;
+    place-items: center;
+    aspect-ratio: 4 / 3;
+    color: oklch(99% 0.012 var(--h) / 0.94);
+    background:
+      radial-gradient(120% 95% at 100% 0%, oklch(88% 0.06 var(--h) / 0.5), transparent 55%),
+      radial-gradient(90% 85% at 10% 100%, oklch(32% 0.11 calc(var(--h) - 30) / 0.65), transparent 62%),
+      linear-gradient(150deg in oklch,
+        oklch(66% 0.13 var(--h)),
+        oklch(41% 0.15 calc(var(--h) + 38)));
+  }
+  .art::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(-52deg,
+      transparent 0 18px, oklch(100% 0 0 / 0.06) 18px 19px);
+    mix-blend-mode: overlay;
+    pointer-events: none;
+  }
+  .art > svg {
+    inline-size: 44%;
+    filter: drop-shadow(0 6px 14px oklch(25% 0.1 var(--h) / 0.45));
+  }
+  .art.mini { aspect-ratio: 1; border-radius: var(--radius-s); }
+  .art.mini > svg { inline-size: 54%; }
+
+  .badge {
+    position: absolute;
+    inset-block-start: 0.7rem;
+    inset-inline-start: 0.7rem;
+    z-index: 1;
+    padding-block: 0.22rem;
+    padding-inline: 0.6rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: color-mix(in oklch, var(--surface-raised) 88%, transparent);
+    backdrop-filter: blur(6px);
+    color: var(--text);
+  }
+  .badge.sale { background: var(--sale); color: oklch(99% 0.01 27); }
+  .badge.new  { background: var(--brand); color: var(--on-brand); }
+
+  .quick-view {
+    position: absolute;
+    inset-block-end: 0.7rem;
+    inset-inline-end: 0.7rem;
+    z-index: 1;
+    min-block-size: 2.4rem;
+    padding-inline: 0.9rem;
+    border: 0;
+    border-radius: 999px;
+    font-size: var(--step--1);
+    font-weight: 600;
+    background: color-mix(in oklch, var(--surface-raised) 80%, transparent);
+    backdrop-filter: blur(8px);
+    color: var(--text);
+    box-shadow: var(--shadow);
+  }
+
+  /* Hover-revealed affordances only where hover exists; touch keeps them visible. */
+  @media (hover: hover) and (pointer: fine) {
+    .card:hover { translate: 0 -3px; box-shadow: var(--shadow-high); }
+    .card .quick-view {
+      opacity: 0;
+      translate: 0 6px;
+      transition: opacity 0.2s ease-out, translate 0.2s ease-out;
+    }
+    .card:hover .quick-view,
+    .card:focus-within .quick-view { opacity: 1; translate: 0 0; }
+    .card .art > svg { transition: scale 0.35s ease-out; }
+    .card:hover .art > svg { scale: 1.06; }
+  }
+
+  .info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    flex: 1;
+    padding: var(--space);
+  }
+  .info h3 { font-size: clamp(1.02rem, 4.4cqi, 1.22rem); font-weight: 650; }
+  .info .cat {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .desc { display: none; font-size: var(--step--1); color: var(--text-muted); }
+
+  /* Fractional star rating — gradient clipped to star glyphs. */
+  .rating { display: flex; align-items: center; gap: 0.45rem; font-size: var(--step--1); }
+  .stars::before {
+    content: "★★★★★";
+    letter-spacing: 0.1em;
+    font-size: 0.95rem;
+    background: linear-gradient(90deg,
+      var(--star) calc(var(--rating) / 5 * 100%),
+      color-mix(in oklch, var(--text) 20%, var(--surface)) 0);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .rating .rc { color: var(--text-muted); }
+
+  /* Price — sale colors mixed from tokens, never hand-picked. */
+  .buy {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-block-start: auto;
+    padding-block-start: 0.4rem;
+  }
+  .price { display: flex; align-items: baseline; gap: 0.5rem; font-weight: 700; }
+  .price .now { font-size: 1.08em; }
+  .price del {
+    font-weight: 500;
+    font-size: 0.88em;
+    color: color-mix(in oklch, var(--text) 42%, var(--surface));
+  }
+  [data-sale] .price .now { color: var(--sale); }
+  .buy .btn { margin-inline-start: auto; }
+
+  /* Card reflows internally by *card* width (container query, cqi type above). */
+  @container card (min-width: 24rem) {
+    .card { flex-direction: row; }
+    .card > .art { flex: 0 0 42%; aspect-ratio: auto; min-block-size: 100%; }
+    .desc { display: block; }
+  }
+
+  /* Variant skin via container style query (Tier B). Fallback: browsers without
+     style queries still get the sale badge + sale price color from classes. */
+  @container style(--variant: sale) {
+    .card {
+      border-color: color-mix(in oklch, var(--sale) 40%, var(--border));
+      background: linear-gradient(175deg in oklch,
+        color-mix(in oklch, var(--sale) 7%, var(--surface-raised)),
+        var(--surface-raised) 45%);
+    }
+  }
+  @container style(--variant: new) {
+    .card {
+      border-color: color-mix(in oklch, var(--brand) 35%, var(--border));
+      background: linear-gradient(175deg in oklch,
+        color-mix(in oklch, var(--brand) 6%, var(--surface-raised)),
+        var(--surface-raised) 45%);
+    }
+  }
+
+  /* ── Skeleton loading (recipe 17 — shimmer, zero layout shift) ─────── */
+  .skeleton-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: var(--space);
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .skeleton {
+    --shine: color-mix(in oklch, var(--text) 6%, var(--surface));
+    background: linear-gradient(100deg in oklch,
+      var(--shine) 40%,
+      color-mix(in oklch, var(--shine) 50%, var(--surface)) 50%,
+      var(--shine) 60%) 0 0 / 200% 100%;
+    border-radius: var(--radius-s);
+  }
+  .skeleton.sk-art   { aspect-ratio: 4 / 3; }
+  .skeleton.sk-title { block-size: 1.1rem; inline-size: 65%; }
+  .skeleton.sk-meta  { block-size: 0.85rem; inline-size: 45%; }
+  .skeleton.sk-price { block-size: 1.1rem; inline-size: 30%; margin-block-start: auto; }
+  @media (prefers-reduced-motion: no-preference) {
+    .skeleton { animation: shimmer 1.4s linear infinite; }
+  }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+
+  /* ── Mini card (recently viewed) ──────────────────────────────────── */
+  .mini-card {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.6rem;
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .mini-card p { font-size: var(--step--1); font-weight: 600; line-height: 1.25; }
+  .mini-card .price { font-size: var(--step--1); }
+
+  /* ── Dialogs: quick view + cart drawer (recipe 5) ─────────────────── */
+  dialog {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-raised);
+    color: var(--text);
+    box-shadow: var(--shadow-high);
+    padding: 0;
+    opacity: 1;
+    scale: 1;
+    transition: opacity 0.25s ease-out, scale 0.25s ease-out, translate 0.3s ease-out,
+                display 0.3s allow-discrete, overlay 0.3s allow-discrete;
+  }
+  dialog::backdrop {
+    background: oklch(15% 0.03 232 / 0.42);
+    backdrop-filter: blur(6px);
+    transition: opacity 0.3s, display 0.3s allow-discrete, overlay 0.3s allow-discrete;
+  }
+  dialog:not([open]) { opacity: 0; }
+  dialog:not([open])::backdrop { opacity: 0; }
+  @starting-style {
+    dialog[open] { opacity: 0; }
+    dialog[open]::backdrop { opacity: 0; }
+  }
+
+  .qv {
+    inline-size: min(52rem, calc(100% - 2 * var(--space)));
+    container: qv / inline-size;
+  }
+  .qv:not([open]) { scale: 0.95; }
+  @starting-style { .qv[open] { scale: 0.95; } }
+
+  .qv-body { display: grid; }
+  .qv-body > .art { aspect-ratio: 4 / 3; border-start-start-radius: inherit; }
+  .qv-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+    padding: calc(var(--space) * 1.25);
+  }
+  .qv-info h2 { font-size: var(--step-2); }
+  .qv-info .desc { display: block; }
+  .qv-info .buy { padding-block-start: var(--space-s); }
+  .swatches { display: flex; gap: 0.5rem; }
+  .swatch {
+    inline-size: 1.5rem;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    border: 2px solid var(--surface-raised);
+    box-shadow: 0 0 0 1px var(--border);
+    background: oklch(52% 0.12 var(--h));
+  }
+  @container qv (min-width: 34rem) {
+    .qv-body { grid-template-columns: 1fr 1.1fr; }
+    .qv-body > .art { aspect-ratio: auto; block-size: 100%; border-end-start-radius: inherit; }
+  }
+
+  .close-form { position: absolute; inset-block-start: 0.7rem; inset-inline-end: 0.7rem; z-index: 2; }
+  .close-btn {
+    display: grid;
+    place-content: center;
+    inline-size: 2.5rem;
+    aspect-ratio: 1;
+    border: 0;
+    border-radius: 50%;
+    background: color-mix(in oklch, var(--surface-raised) 82%, transparent);
+    backdrop-filter: blur(8px);
+    font-size: 1.1rem;
+    line-height: 1;
+    box-shadow: var(--shadow);
+  }
+  .close-btn:hover { background: var(--surface-raised); }
+
+  /* Cart drawer — a <dialog> that slides from inline-end. */
+  .drawer {
+    display: flex;
+    flex-direction: column;
+    margin-block: 0;
+    margin-inline: auto 0;                   /* pinned to inline-end */
+    block-size: 100dvh;
+    max-block-size: 100dvh;
+    inline-size: min(26rem, 92vw);
+    border: 0;
+    border-inline-start: 1px solid var(--border);
+    border-radius: 0;
+    border-start-start-radius: var(--radius);
+    border-end-start-radius: var(--radius);
+    translate: 0 0;
+    padding-block-end: env(safe-area-inset-bottom);
+  }
+  .drawer:not([open]) { translate: 100% 0; }
+  @starting-style { .drawer[open] { translate: 100% 0; } }
+
+  .drawer-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space);
+    border-block-end: 1px solid var(--border);
+  }
+  .drawer-head h2 { font-size: var(--step-1); }
+  .drawer-head .close-form { position: static; }
+
+  .cart-lines {
+    flex: 1;
+    overflow-y: auto;
+    overscroll-behavior: contain;            /* no scroll chaining to the page */
+    scrollbar-gutter: stable;
+    padding: var(--space);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space);
+  }
+  .cart-line {
+    display: grid;
+    grid-template-columns: 3.4rem 1fr auto;
+    align-items: center;
+    gap: 0.8rem;
+  }
+  .cart-line .line-name { font-weight: 600; font-size: var(--step--1); line-height: 1.3; }
+  .cart-line .line-price { font-size: var(--step--1); color: var(--text-muted); }
+
+  /* Empty state driven by :has() — no JS class juggling. */
+  .cart-empty { display: none; padding: var(--space); color: var(--text-muted); text-align: center; }
+  .cart-body:not(:has(.cart-line:not([hidden]))) .cart-empty { display: block; }
+  .cart-body:not(:has(.cart-line:not([hidden]))) ~ .drawer-foot .btn { opacity: 0.45; pointer-events: none; }
+
+  .qty {
+    display: flex;
+    align-items: center;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    overflow: clip;
+  }
+  .qty button {
+    inline-size: 2.25rem;
+    block-size: 2.25rem;
+    border: 0;
+    background: transparent;
+    font-size: 1rem;
+    display: grid;
+    place-content: center;
+    transition: background-color 0.15s;
+  }
+  .qty button:hover { background: var(--brand-subtle); }
+  .qty output { min-inline-size: 2ch; text-align: center; font-weight: 600; font-size: var(--step--1); }
+
+  .drawer-foot {
+    padding: var(--space);
+    border-block-start: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    background: color-mix(in oklch, var(--brand) 4%, var(--surface-raised));
+  }
+  .subtotal-row { display: flex; justify-content: space-between; font-weight: 700; }
+  .subtotal-row .hint { font-weight: 400; font-size: var(--step--1); color: var(--text-muted); }
+
+  /* ── Size-guide tooltip: popover + anchor positioning (recipe 6) ───── */
+  .size-btn {
+    align-self: start;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-block-size: 2.2rem;
+    padding-inline: 0.2rem;
+    border: 0;
+    background: none;
+    font-size: var(--step--1);
+    font-weight: 600;
+    color: var(--brand);
+    text-decoration: underline;
+    text-decoration-thickness: 0.08em;
+    text-underline-offset: 0.18em;
+    text-decoration-skip-ink: all;
+  }
+
+  #size-tip {
+    inline-size: min(19rem, 90vw);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface-raised);
+    color: var(--text);
+    box-shadow: var(--shadow-high);
+    padding: 0.9rem 1rem;
+    font-size: var(--step--1);
+    opacity: 0;
+    translate: 0 6px;
+    transition: opacity 0.18s ease-out, translate 0.18s ease-out,
+                display 0.18s allow-discrete, overlay 0.18s allow-discrete;
+  }
+  #size-tip:popover-open { opacity: 1; translate: 0 0; }
+  @starting-style { #size-tip:popover-open { opacity: 0; translate: 0 6px; } }
+
+  /* Anchor positioning is guarded: without it the popover keeps the UA's
+     centered fallback rather than landing unpositioned. popovertarget gives
+     an implicit anchor — no anchor-name needed, and the tip re-anchors to
+     whichever button opened it. */
+  @supports (position-area: center) {
+    #size-tip {
+      position: absolute;
+      inset: auto;                            /* clear UA centering */
+      position-area: block-start center;
+      position-try-fallbacks: flip-block, flip-inline;
+      margin-block: 0.5rem;
+    }
+  }
+  #size-tip table { border-collapse: collapse; inline-size: 100%; margin-block-start: 0.4rem; }
+  #size-tip :is(th, td) {
+    text-align: start;
+    padding-block: 0.3rem;
+    border-block-end: 1px solid var(--border);
+  }
+  #size-tip th { color: var(--text-muted); font-weight: 600; }
+  #size-tip tr:last-child td { border-block-end: 0; }
+
+  /* ── Footer ───────────────────────────────────────────────────────── */
+  .site-footer {
+    border-block-start: 1px solid var(--border);
+    padding-block: calc(var(--space) * 1.5);
+    padding-inline: var(--space);
+    text-align: center;
+    font-size: var(--step--1);
+    color: var(--text-muted);
+  }
+}
+
+/* 7 ── Utilities + progressive-enhancement extras */
+@layer utilities {
+  .visually-hidden {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* Grid entrance stagger — motion-gated; Tier C sibling-index() with fallback. */
+  @media (prefers-reduced-motion: no-preference) {
+    .grid > * { animation: fade-up 0.45s ease-out backwards; }
+    @supports (animation-delay: calc(sibling-index() * 1ms)) {
+      .grid > * { animation-delay: calc(sibling-index() * 60ms); }
+    }
+    @supports not (animation-delay: calc(sibling-index() * 1ms)) {
+      .grid > :nth-child(2) { animation-delay: 60ms; }
+      .grid > :nth-child(3) { animation-delay: 120ms; }
+      .grid > :nth-child(4) { animation-delay: 180ms; }
+      .grid > :nth-child(n + 5) { animation-delay: 240ms; }
+    }
+  }
+  @keyframes fade-up { from { opacity: 0; translate: 0 18px; } }
+
+  /* Squircle cards where the engine supports it (Tier C, harmless elsewhere). */
+  @supports (corner-shape: squircle) {
+    .card, dialog, .mini-card {
+      corner-shape: squircle;
+      border-radius: calc(var(--radius) * 1.5);
+    }
+  }
+}
+
+/* Unlayered on purpose: the reduced-motion kill switch outranks everything. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="header-wrap">
+  <header class="site-header">
+    <a class="logo" href="#">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+           stroke-linejoin="round" aria-hidden="true">
+        <path d="M3 19 10 5l4 8 3-5 4 11z"></path>
+      </svg>
+      Northline Supply
+    </a>
+    <nav aria-label="Primary">
+      <a href="#shop">Shop</a>
+      <a href="#">Journal</a>
+      <a href="#">Repairs</a>
+    </nav>
+    <button class="cart-btn" type="button" data-open="cart">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M5 8h14l-1.2 11a2 2 0 0 1-2 1.8H8.2a2 2 0 0 1-2-1.8Z"></path>
+        <path d="M8.5 8V6.5a3.5 3.5 0 0 1 7 0V8"></path>
+      </svg>
+      Cart
+      <span class="count" id="cart-count" aria-label="items in cart">2</span>
+    </button>
+  </header>
+</div>
+
+<main class="page">
+
+  <section class="hero">
+    <p class="kicker">Autumn drop · 26</p>
+    <h1>Built for the <span class="grad">long way north</span>.</h1>
+    <p>Field-tested packs, shells, and camp goods with lifetime repairs.
+       Fewer things, made properly.</p>
+  </section>
+
+  <section class="shop" id="shop" aria-label="Products">
+    <!-- Filter bar: checkbox + radio state restyles the grid through :has() alone. -->
+    <form class="filters" aria-label="Filter products">
+      <fieldset>
+        <legend class="visually-hidden">Category</legend>
+        <label class="pill"><input class="visually-hidden" type="radio" name="cat" id="c-all" checked>All</label>
+        <label class="pill"><input class="visually-hidden" type="radio" name="cat" id="c-packs">Packs</label>
+        <label class="pill"><input class="visually-hidden" type="radio" name="cat" id="c-apparel">Apparel</label>
+        <label class="pill"><input class="visually-hidden" type="radio" name="cat" id="c-acc">Accessories</label>
+      </fieldset>
+      <span class="divider" aria-hidden="true"></span>
+      <fieldset>
+        <legend class="visually-hidden">Highlight</legend>
+        <label class="pill sale-pill"><input class="visually-hidden" type="checkbox" id="f-sale"><span class="dot"></span>On sale</label>
+        <label class="pill"><input class="visually-hidden" type="checkbox" id="f-new"><span class="dot"></span>New arrivals</label>
+      </fieldset>
+    </form>
+
+    <ul class="grid">
+      <li class="product" data-cat="packs" data-sale style="--variant: sale; --h: 250">
+        <article class="card">
+          <div class="art">
+            <span class="badge sale">Sale</span>
+            <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="6"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M45 34c0-14 30-14 30 0"></path>
+              <rect x="30" y="34" width="60" height="64" rx="16"></rect>
+              <path d="M38 58h44"></path>
+              <rect x="44" y="70" width="32" height="20" rx="8"></rect>
+            </svg>
+            <button class="quick-view" type="button" data-open="qv-fjell">Quick view</button>
+          </div>
+          <div class="info">
+            <p class="cat">Packs</p>
+            <h3>Fjell 32L Alpine Pack</h3>
+            <p class="rating">
+              <span class="stars" style="--rating: 4.7" role="img" aria-label="Rated 4.7 out of 5 stars"></span>
+              <span class="rc">(212)</span>
+            </p>
+            <p class="desc">Ripstop nylon, welded seams, one honest lid pocket.
+               Carries 14&nbsp;kg like half that.</p>
+            <div class="buy">
+              <p class="price"><span class="now">$118</span> <del>$148</del></p>
+              <button class="btn" type="button" data-add="fjell">Add</button>
+            </div>
+          </div>
+        </article>
+      </li>
+
+      <li class="product" data-cat="apparel" data-new style="--variant: new; --h: 205">
+        <article class="card">
+          <div class="art">
+            <span class="badge new">New</span>
+            <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="6"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M45 27 25 39l8 22 10-5v39h34V56l10 5 8-22-20-12c-5 7-25 7-30 0Z"></path>
+              <path d="M60 42v53"></path>
+            </svg>
+            <button class="quick-view" type="button" data-open="qv-meridian">Quick view</button>
+          </div>
+          <div class="info">
+            <p class="cat">Apparel</p>
+            <h3>Meridian 3L Shell</h3>
+            <p class="rating">
+              <span class="stars" style="--rating: 4.9" role="img" aria-label="Rated 4.9 out of 5 stars"></span>
+              <span class="rc">(87)</span>
+            </p>
+            <p class="desc">Three-layer waterproof shell with pit zips and a
+               hood that fits over a helmet, not just under one.</p>
+            <div class="buy">
+              <p class="price"><span class="now">$189</span></p>
+              <button class="btn" type="button" data-add="meridian">Add</button>
+            </div>
+          </div>
+        </article>
+      </li>
+
+      <li class="product" data-cat="accessories" style="--h: 62">
+        <article class="card">
+          <div class="art">
+            <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="6"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M50 18q5 7 0 13"></path>
+              <path d="M66 18q5 7 0 13"></path>
+              <rect x="34" y="42" width="46" height="50" rx="9"></rect>
+              <path d="M80 52h8a12 12 0 0 1 0 26h-8"></path>
+            </svg>
+          </div>
+          <div class="info">
+            <p class="cat">Accessories</p>
+            <h3>Basecamp Enamel Mug</h3>
+            <p class="rating">
+              <span class="stars" style="--rating: 4.5" role="img" aria-label="Rated 4.5 out of 5 stars"></span>
+              <span class="rc">(340)</span>
+            </p>
+            <p class="desc">Double-fired enamel over steel. Survives the drop,
+               the fire, and the dishwasher you don't have out there.</p>
+            <div class="buy">
+              <p class="price"><span class="now">$24</span></p>
+              <button class="btn" type="button" data-add="mug">Add</button>
+            </div>
+          </div>
+        </article>
+      </li>
+
+      <li class="product" data-cat="apparel" data-sale style="--variant: sale; --h: 320">
+        <article class="card">
+          <div class="art">
+            <span class="badge sale">Sale</span>
+            <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="6"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="60" cy="40" r="8"></circle>
+              <path d="M32 78a28 28 0 0 1 56 0"></path>
+              <rect x="28" y="78" width="64" height="14" rx="7"></rect>
+              <path d="M46 62v16M60 56v22M74 62v16"></path>
+            </svg>
+          </div>
+          <div class="info">
+            <p class="cat">Apparel</p>
+            <h3>Traverse Merino Beanie</h3>
+            <p class="rating">
+              <span class="stars" style="--rating: 4.6" role="img" aria-label="Rated 4.6 out of 5 stars"></span>
+              <span class="rc">(154)</span>
+            </p>
+            <p class="desc">19.5-micron merino, double-knit crown. Warm wet,
+               warmer dry, never itchy.</p>
+            <div class="buy">
+              <p class="price"><span class="now">$29</span> <del>$38</del></p>
+              <button class="btn" type="button" data-add="beanie">Add</button>
+            </div>
+          </div>
+        </article>
+      </li>
+
+      <li class="product" data-cat="accessories" data-new style="--variant: new; --h: 150">
+        <article class="card">
+          <div class="art">
+            <span class="badge new">New</span>
+            <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="6"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M48 24h24v38l16 16a14 14 0 0 1-20 16L48 74Z"></path>
+              <path d="M48 36h24"></path>
+            </svg>
+          </div>
+          <div class="info">
+            <p class="cat">Accessories</p>
+            <h3>Ridgeline Trail Socks · 2-pack</h3>
+            <p class="rating">
+              <span class="stars" style="--rating: 4.4" role="img" aria-label="Rated 4.4 out of 5 stars"></span>
+              <span class="rc">(96)</span>
+            </p>
+            <p class="desc">Cushioned merino blend with a seamless toe.
+               Two pairs, zero hot spots.</p>
+            <div class="buy">
+              <p class="price"><span class="now">$26</span></p>
+              <button class="btn" type="button" data-add="socks">Add</button>
+            </div>
+          </div>
+        </article>
+      </li>
+
+      <li class="product" data-cat="apparel" style="--h: 22">
+        <article class="card">
+          <div class="art">
+            <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="6"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M46 26c4 8 24 8 28 0l10 6-2 18-6-2v46H44V48l-6 2-2-18Z"></path>
+              <path d="M44 62h32M44 76h32"></path>
+            </svg>
+          </div>
+          <div class="info">
+            <p class="cat">Apparel</p>
+            <h3>Halvard Down Vest</h3>
+            <p class="rating">
+              <span class="stars" style="--rating: 4.8" role="img" aria-label="Rated 4.8 out of 5 stars"></span>
+              <span class="rc">(63)</span>
+            </p>
+            <p class="desc">800-fill recycled down in a windproof shell.
+               The layer that never leaves the pack's top pocket.</p>
+            <div class="buy">
+              <p class="price"><span class="now">$139</span></p>
+              <button class="btn" type="button" data-add="vest">Add</button>
+            </div>
+          </div>
+        </article>
+      </li>
+    </ul>
+  </section>
+
+  <!-- Skeleton loading demo: same footprint as real cards, shimmer recipe. -->
+  <section class="below-fold" aria-label="More products loading">
+    <div class="section-head">
+      <h2>More from the drop</h2>
+      <span class="aside">Loading…</span>
+    </div>
+    <div class="grid">
+      <div class="skeleton-card" aria-hidden="true">
+        <div class="skeleton sk-art"></div>
+        <div class="skeleton sk-title"></div>
+        <div class="skeleton sk-meta"></div>
+        <div class="skeleton sk-price"></div>
+      </div>
+      <div class="skeleton-card" aria-hidden="true">
+        <div class="skeleton sk-art"></div>
+        <div class="skeleton sk-title"></div>
+        <div class="skeleton sk-meta"></div>
+        <div class="skeleton sk-price"></div>
+      </div>
+      <div class="skeleton-card" aria-hidden="true">
+        <div class="skeleton sk-art"></div>
+        <div class="skeleton sk-title"></div>
+        <div class="skeleton sk-meta"></div>
+        <div class="skeleton sk-price"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Recently viewed: scroll-snap row, contained overscroll. -->
+  <section class="below-fold" aria-label="Recently viewed">
+    <div class="section-head">
+      <h2>Recently viewed</h2>
+      <span class="aside">Scroll →</span>
+    </div>
+    <ul class="snap-row">
+      <li class="mini-card" style="--h: 250">
+        <span class="art mini" aria-hidden="true"></span>
+        <p>Fjell 32L Alpine Pack</p>
+        <p class="price"><span class="now">$118</span></p>
+      </li>
+      <li class="mini-card" style="--h: 95">
+        <span class="art mini" aria-hidden="true"></span>
+        <p>Cairn Ti Spork</p>
+        <p class="price"><span class="now">$16</span></p>
+      </li>
+      <li class="mini-card" style="--h: 205">
+        <span class="art mini" aria-hidden="true"></span>
+        <p>Meridian 3L Shell</p>
+        <p class="price"><span class="now">$189</span></p>
+      </li>
+      <li class="mini-card" style="--h: 290">
+        <span class="art mini" aria-hidden="true"></span>
+        <p>Aurora Dry Sack 8L</p>
+        <p class="price"><span class="now">$22</span></p>
+      </li>
+      <li class="mini-card" style="--h: 150">
+        <span class="art mini" aria-hidden="true"></span>
+        <p>Ridgeline Trail Socks</p>
+        <p class="price"><span class="now">$26</span></p>
+      </li>
+      <li class="mini-card" style="--h: 22">
+        <span class="art mini" aria-hidden="true"></span>
+        <p>Halvard Down Vest</p>
+        <p class="price"><span class="now">$139</span></p>
+      </li>
+    </ul>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <p>Northline Supply — a fictional brand demonstrating the modern-css skill.
+     No trackers, no framework, one file.</p>
+</footer>
+
+<!-- ── Quick view: Fjell pack ─────────────────────────────────────────── -->
+<dialog id="qv-fjell" class="qv" closedby="any" aria-labelledby="qv-fjell-title">
+  <form method="dialog" class="close-form">
+    <button class="close-btn" aria-label="Close quick view">&times;</button>
+  </form>
+  <div class="qv-body" style="--h: 250">
+    <div class="art">
+      <span class="badge sale">Sale</span>
+      <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="6"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M45 34c0-14 30-14 30 0"></path>
+        <rect x="30" y="34" width="60" height="64" rx="16"></rect>
+        <path d="M38 58h44"></path>
+        <rect x="44" y="70" width="32" height="20" rx="8"></rect>
+      </svg>
+    </div>
+    <div class="qv-info">
+      <p class="cat">Packs · Fjell series</p>
+      <h2 id="qv-fjell-title">Fjell 32L Alpine Pack</h2>
+      <p class="rating">
+        <span class="stars" style="--rating: 4.7" role="img" aria-label="Rated 4.7 out of 5 stars"></span>
+        <span class="rc">212 reviews</span>
+      </p>
+      <p class="desc">A single-compartment alpine pack in 210-denier ripstop
+         with welded seams, a floating lid, and dual ice-tool carries.
+         Sized for day-and-a-half pushes; stripped, it weighs 840&nbsp;g.</p>
+      <div class="swatches" aria-label="Colors">
+        <span class="swatch" style="--h: 250" title="Fjord"></span>
+        <span class="swatch" style="--h: 150" title="Moss"></span>
+        <span class="swatch" style="--h: 60" title="Ember"></span>
+      </div>
+      <div class="buy" data-sale>
+        <p class="price"><span class="now">$118</span> <del>$148</del></p>
+        <button class="btn" type="button" data-add="fjell">Add to cart</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<!-- ── Quick view: Meridian shell (with size-guide popover trigger) ───── -->
+<dialog id="qv-meridian" class="qv" closedby="any" aria-labelledby="qv-meridian-title">
+  <form method="dialog" class="close-form">
+    <button class="close-btn" aria-label="Close quick view">&times;</button>
+  </form>
+  <div class="qv-body" style="--h: 205">
+    <div class="art">
+      <span class="badge new">New</span>
+      <svg viewBox="0 0 120 120" fill="none" stroke="currentColor" stroke-width="6"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M45 27 25 39l8 22 10-5v39h34V56l10 5 8-22-20-12c-5 7-25 7-30 0Z"></path>
+        <path d="M60 42v53"></path>
+      </svg>
+    </div>
+    <div class="qv-info">
+      <p class="cat">Apparel · Shells</p>
+      <h2 id="qv-meridian-title">Meridian 3L Shell</h2>
+      <p class="rating">
+        <span class="stars" style="--rating: 4.9" role="img" aria-label="Rated 4.9 out of 5 stars"></span>
+        <span class="rc">87 reviews</span>
+      </p>
+      <p class="desc">Three-layer waterproof-breathable shell, 20K/20K rated,
+         with pit zips, a two-way front zip, and a wire-brimmed hood that
+         actually turns with your head.</p>
+      <!-- popovertarget = declarative open/close AND an implicit anchor. -->
+      <button class="size-btn" type="button" popovertarget="size-tip">
+        Size guide
+      </button>
+      <div class="buy">
+        <p class="price"><span class="now">$189</span></p>
+        <button class="btn" type="button" data-add="meridian">Add to cart</button>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<!-- Size-guide tooltip: top-layer popover, anchored to whichever button opened it. -->
+<div id="size-tip" popover>
+  <strong>Meridian 3L — fits true to size</strong>
+  <table>
+    <thead>
+      <tr><th scope="col">Size</th><th scope="col">Chest</th><th scope="col">Back length</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>S</td><td>92–98 cm</td><td>71 cm</td></tr>
+      <tr><td>M</td><td>98–104 cm</td><td>73 cm</td></tr>
+      <tr><td>L</td><td>104–112 cm</td><td>75 cm</td></tr>
+      <tr><td>XL</td><td>112–120 cm</td><td>77 cm</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ── Cart drawer: a dialog sliding from inline-end ──────────────────── -->
+<dialog id="cart" class="drawer" closedby="any" aria-labelledby="cart-title">
+  <header class="drawer-head">
+    <h2 id="cart-title">Your cart</h2>
+    <form method="dialog" class="close-form">
+      <button class="close-btn" aria-label="Close cart">&times;</button>
+    </form>
+  </header>
+
+  <div class="cart-body cart-lines">
+    <div class="cart-line" id="line-fjell" data-price="118">
+      <span class="art mini" style="--h: 250" aria-hidden="true"></span>
+      <div>
+        <p class="line-name">Fjell 32L Alpine Pack</p>
+        <p class="line-price">$118.00</p>
+      </div>
+      <div class="qty" role="group" aria-label="Quantity, Fjell 32L Alpine Pack">
+        <button type="button" data-step="-1" aria-label="Decrease quantity">&minus;</button>
+        <output>1</output>
+        <button type="button" data-step="1" aria-label="Increase quantity">+</button>
+      </div>
+    </div>
+
+    <div class="cart-line" id="line-meridian" data-price="189" hidden>
+      <span class="art mini" style="--h: 205" aria-hidden="true"></span>
+      <div>
+        <p class="line-name">Meridian 3L Shell</p>
+        <p class="line-price">$189.00</p>
+      </div>
+      <div class="qty" role="group" aria-label="Quantity, Meridian 3L Shell">
+        <button type="button" data-step="-1" aria-label="Decrease quantity">&minus;</button>
+        <output>0</output>
+        <button type="button" data-step="1" aria-label="Increase quantity">+</button>
+      </div>
+    </div>
+
+    <div class="cart-line" id="line-mug" data-price="24" hidden>
+      <span class="art mini" style="--h: 62" aria-hidden="true"></span>
+      <div>
+        <p class="line-name">Basecamp Enamel Mug</p>
+        <p class="line-price">$24.00</p>
+      </div>
+      <div class="qty" role="group" aria-label="Quantity, Basecamp Enamel Mug">
+        <button type="button" data-step="-1" aria-label="Decrease quantity">&minus;</button>
+        <output>0</output>
+        <button type="button" data-step="1" aria-label="Increase quantity">+</button>
+      </div>
+    </div>
+
+    <div class="cart-line" id="line-beanie" data-price="29">
+      <span class="art mini" style="--h: 320" aria-hidden="true"></span>
+      <div>
+        <p class="line-name">Traverse Merino Beanie</p>
+        <p class="line-price">$29.00</p>
+      </div>
+      <div class="qty" role="group" aria-label="Quantity, Traverse Merino Beanie">
+        <button type="button" data-step="-1" aria-label="Decrease quantity">&minus;</button>
+        <output>1</output>
+        <button type="button" data-step="1" aria-label="Increase quantity">+</button>
+      </div>
+    </div>
+
+    <div class="cart-line" id="line-socks" data-price="26" hidden>
+      <span class="art mini" style="--h: 150" aria-hidden="true"></span>
+      <div>
+        <p class="line-name">Ridgeline Trail Socks · 2-pack</p>
+        <p class="line-price">$26.00</p>
+      </div>
+      <div class="qty" role="group" aria-label="Quantity, Ridgeline Trail Socks">
+        <button type="button" data-step="-1" aria-label="Decrease quantity">&minus;</button>
+        <output>0</output>
+        <button type="button" data-step="1" aria-label="Increase quantity">+</button>
+      </div>
+    </div>
+
+    <div class="cart-line" id="line-vest" data-price="139" hidden>
+      <span class="art mini" style="--h: 22" aria-hidden="true"></span>
+      <div>
+        <p class="line-name">Halvard Down Vest</p>
+        <p class="line-price">$139.00</p>
+      </div>
+      <div class="qty" role="group" aria-label="Quantity, Halvard Down Vest">
+        <button type="button" data-step="-1" aria-label="Decrease quantity">&minus;</button>
+        <output>0</output>
+        <button type="button" data-step="1" aria-label="Increase quantity">+</button>
+      </div>
+    </div>
+
+    <p class="cart-empty">Your cart is empty — the north waits for no one.</p>
+  </div>
+
+  <footer class="drawer-foot">
+    <p class="subtotal-row">
+      <span>Subtotal <span class="hint">· shipping at checkout</span></span>
+      <span id="subtotal">$147.00</span>
+    </p>
+    <button class="btn" type="button">Checkout</button>
+  </footer>
+</dialog>
+
+<script>
+/* Per the skill's CSS-first rule, JS exists only where the platform has no
+   declarative path yet:
+   1) opening a modal <dialog> requires .showModal() — the HTML invoker
+      (commandfor/command) is still Tier C, so buttons are wired by hand;
+   2) cart state (quantities, subtotal, count) is application data — CSS
+      styles it (:has() empty state), JS owns the numbers.
+   Closing dialogs needs no JS: every close button is a <form method="dialog">,
+   and light dismiss comes from closedby="any" where supported. */
+const $$ = (sel) => document.querySelectorAll(sel);
+
+for (const btn of $$("[data-open]"))            /* 1) dialog openers */
+  btn.addEventListener("click", () =>
+    document.getElementById(btn.dataset.open).showModal());
+
+function recalc() {                             /* 2) cart math */
+  let sum = 0, count = 0;
+  for (const line of $$(".cart-line")) {
+    const qty = +line.querySelector("output").textContent;
+    line.hidden = qty === 0;                    /* CSS can't read <output> text */
+    count += qty;
+    sum += qty * +line.dataset.price;
+  }
+  document.getElementById("subtotal").textContent = "$" + sum.toFixed(2);
+  document.getElementById("cart-count").textContent = count;
+}
+for (const btn of $$(".qty button"))            /* quantity steppers */
+  btn.addEventListener("click", () => {
+    const out = btn.parentElement.querySelector("output");
+    out.textContent = Math.max(0, +out.textContent + +btn.dataset.step);
+    recalc();
+  });
+for (const btn of $$("[data-add]"))             /* add-to-cart buttons */
+  btn.addEventListener("click", () => {
+    const out = document.querySelector("#line-" + btn.dataset.add + " output");
+    out.textContent = +out.textContent + 1;
+    recalc();
+  });
+recalc();
+</script>
+
+</body>
+</html>

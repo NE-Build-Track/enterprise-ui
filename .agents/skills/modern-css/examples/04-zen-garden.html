@@ -1,0 +1,1124 @@
+<!doctype html>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+  THE MODERN CSS GARDEN — a homage to the CSS Zen Garden
+  ═══════════════════════════════════════════════════════════════════════════
+
+  CONCEPT
+    One semantic HTML document. Four complete, radically different designs.
+    Zero JavaScript. The markup below never changes — every theme re-derives
+    the entire visual identity (layout structure, type scale, color system,
+    motion language) from design tokens flipped by a pure-CSS radio switcher.
+
+  HOW THE SWITCHER WORKS (the point of this demo)
+    · A <fieldset> of 4 radio inputs, visually styled as theme chips.
+      Radios give us keyboard support (arrow keys move within the group,
+      Tab enters/leaves it) and state for free — no click handlers.
+    · Theme activation:  :root:has(#theme-x:checked) { …token overrides… }
+      Because :has() can see the checked radio from the root, checking a chip
+      re-scopes every custom property on :root. Themes override tokens AND
+      structural presentation: --page-cols / --page-areas feed
+      grid-template-columns / grid-template-areas on <body>, so the SAME
+      landmarks land in wholly different page architectures (centered column,
+      exposed 2-col grid, sidebar-nav terminal, glass asymmetric split).
+    · Each theme lives in its own cascade sub-layer
+      (@layer themes.serene / .brutalist / .terminal / .aurora) so source
+      order inside a theme never fights another theme — layer order rules.
+
+  GRACEFUL DEGRADATION STRATEGY
+    Serene IS the default: its tokens live unguarded on :root in @layer
+    tokens, and the base/layout layers render it with Tier-A features only.
+    A browser with no :has() support drops every :root:has(...) rule at parse
+    time and simply shows the Serene essay — a complete, polished page.
+    Radios still toggle (natively) but change nothing; nothing breaks.
+
+  WHY NO VIEW TRANSITIONS
+    A full cross-fade snapshot would need exactly one line of JS —
+    document.startViewTransition(() => radio.checked = true) — because the
+    View Transitions API is imperative for same-document changes. We omit it
+    deliberately to stay 100% CSS. Instead the theme swap itself animates:
+    interpolable tokens (colors, radii, shadows) transition smoothly, and
+    discrete properties (grid-template-areas, font-family) swap at the 50%
+    midpoint of the same crossfade via `transition-behavior: allow-discrete`,
+    so layout + typography flip in the middle of the color fade. See
+    @layer motion below.
+
+  FEATURE LIST (tiers per references/feature-support.md, 2026-07)
+    Tier A — used unguarded
+      · Grid + grid-template-areas driven by custom properties
+      · :has() theme scoping (:root:has(input:checked))
+      · @layer with nested sub-layers (themes.serene …)
+      · Native nesting, :is()/:where()
+      · oklch(), color-mix(in oklch), relative color syntax*
+      · Logical properties throughout (inline-size, margin-block, inset-*)
+      · clamp() fluid type + space scales; lh units
+      · conic-/radial-gradient (in oklch), backdrop-filter
+      · dvh viewport units, overscroll/touch-action, scroll-margin
+      · :focus-visible, accent-color, scrollbar-color, ::marker, ::selection
+      · prefers-reduced-motion / prefers-color-scheme / forced-colors
+    Tier B — default, degrade to lost polish only
+      · light-dark() + color-scheme per theme
+      · @property (typed, animatable --aurora-angle)
+      · transition-behavior: allow-discrete (discrete-prop crossfade)
+      · text-wrap: balance / pretty
+      · contrast-color() (::selection, behind @supports with fallback)
+      · content alt text  content: "…" / ""
+    Tier C — @supports-guarded enhancements with working fallbacks
+      · initial-letter drop cap (fallback: floated ::first-letter)
+      · corner-shape: squircle (fallback: border-radius)
+      · prefers-reduced-transparency (fallback: opaque panels)
+
+  ACCESSIBILITY
+    Landmarks: header/nav/main/aside/footer + article/sections. Radio group
+    is a real fieldset+legend; chips show :focus-visible rings; hit targets
+    ≥44px; all motion (blink, marquee, aurora drift, crossfade) is gated
+    behind prefers-reduced-motion: no-preference; contrast ≥4.5:1 per theme.
+
+  Zero external resources. Zero <script> tags. View source — this is it.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Modern CSS Garden — one document, four designs, zero JavaScript</title>
+<style>
+/* ════════════════════════════════════════════════════════════════════
+   1 · LAYER ORDER — declared up front; later layers always win.
+   Themes get nested sub-layers so each design is self-contained.
+   ════════════════════════════════════════════════════════════════════ */
+@layer reset, tokens, base, layout, switcher, themes, motion, responsive, a11y;
+@layer themes { @layer serene, brutalist, terminal, aurora; }
+
+/* Typed, animatable token for Aurora's drifting gradient (Tier B).
+   Without @property support the animation simply doesn't run — the
+   gradient still renders from the static fallback value on :root. */
+@property --aurora-angle {
+  syntax: "<angle>";
+  inherits: true;
+  initial-value: 40deg;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   2 · RESET
+   ════════════════════════════════════════════════════════════════════ */
+@layer reset {
+  *, *::before, *::after { box-sizing: border-box; }
+  * { margin: 0; }
+  img, picture, video, canvas, svg { display: block; max-inline-size: 100%; }
+  input, button, textarea, select { font: inherit; }
+  p, h1, h2, h3, h4, blockquote { overflow-wrap: break-word; }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   3 · TOKENS — these ARE the Serene theme. Serene is the default so a
+   browser without :has() (which drops every :root:has() rule at parse
+   time) still gets a finished, elegant page. Every other theme is a
+   token override under a :has() scope.
+   ════════════════════════════════════════════════════════════════════ */
+@layer tokens {
+  :root {
+    /* Serene respects the OS scheme: cream paper by day, warm ink by night. */
+    color-scheme: light dark;
+
+    /* ---- color: one warm hue, everything derived in oklch ---- */
+    --hue: 85;
+    --surface:        light-dark(oklch(96.5% 0.014 var(--hue)), oklch(21% 0.014 var(--hue)));
+    --surface-raised: light-dark(oklch(98.5% 0.008 var(--hue)), oklch(25% 0.016 var(--hue)));
+    --text:           light-dark(oklch(28% 0.022 60),           oklch(90% 0.016 var(--hue)));
+    --text-muted:     color-mix(in oklch, var(--text) 58%, var(--surface));
+    --accent:         light-dark(oklch(46% 0.09 155),           oklch(76% 0.10 155));
+    --on-accent:      light-dark(oklch(98% 0.01 155),           oklch(22% 0.04 155));
+    --border:         color-mix(in oklch, var(--text) 20%, var(--surface));
+    --hairline:       color-mix(in oklch, var(--text) 32%, var(--surface));
+
+    /* ---- type: system serif stack, fluid modular scale ---- */
+    --font-body: "Iowan Old Style", "Palatino Linotype", "Book Antiqua",
+                 Palatino, Georgia, "Times New Roman", serif;
+    --font-head: var(--font-body);
+    --step--1: clamp(0.83rem, 0.80rem + 0.15vw, 0.94rem);
+    --step-0:  clamp(1.06rem, 1.00rem + 0.30vw, 1.25rem);
+    --step-1:  clamp(1.30rem, 1.20rem + 0.50vw, 1.62rem);
+    --step-2:  clamp(1.62rem, 1.44rem + 0.90vw, 2.18rem);
+    --step-3:  clamp(2.30rem, 1.80rem + 2.50vw, 3.90rem);
+    --leading: 1.65;
+    --head-weight: 500;
+    --head-transform: none;
+    --head-spacing: 0.01em;
+
+    /* ---- space, shape, depth ---- */
+    --space:   clamp(1rem, 0.5rem + 1.5vw, 1.75rem);
+    --space-l: calc(var(--space) * 1.8);
+    --radius:  3px;
+    --shadow:  0 1px 2px oklch(30% 0.02 var(--hue) / 0.06),
+               0 10px 30px oklch(30% 0.02 var(--hue) / 0.08);
+    --panel-bg: transparent;              /* Serene panels are bare paper  */
+    --panel-border: transparent;
+    --panel-pad: 0px;
+
+    /* ---- structure: the whole page architecture is two tokens ----
+       Serene = a single centered reading column with generous gutters. */
+    --page-cols: minmax(var(--space), 1fr)
+                 min(100% - 2 * var(--space), 44rem)
+                 minmax(var(--space), 1fr);
+    --page-areas:
+      ". switch ."
+      ". header ."
+      ". nav    ."
+      ". main   ."
+      ". aside  ."
+      ". footer .";
+    --row-gap: var(--space-l);
+    --col-gap: 0px;
+
+    /* ---- Serene drop cap, expressed as tokens so other themes can
+       switch it off without re-declaring the ::first-letter rule ---- */
+    --dropcap-float: inline-start;
+    --dropcap-size: 3.4em;
+    --dropcap-initial: 3;
+
+    /* Aurora's angle needs a fallback where @property is unsupported. */
+    --aurora-angle: 40deg;
+
+    accent-color: var(--accent);
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   4 · BASE — typography, prose, shared element styling. Token-driven,
+   so themes restyle almost everything without touching these rules.
+   ════════════════════════════════════════════════════════════════════ */
+@layer base {
+  body {
+    background: var(--surface);
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: var(--step-0);
+    line-height: var(--leading);
+    -webkit-font-smoothing: antialiased;
+    scrollbar-color: var(--hairline) transparent;
+  }
+
+  h1, h2, h3 {
+    font-family: var(--font-head);
+    font-weight: var(--head-weight);
+    text-transform: var(--head-transform);
+    letter-spacing: var(--head-spacing);
+    line-height: 1.12;
+    text-wrap: balance;
+  }
+  h1 { font-size: var(--step-3); }
+  h2 { font-size: var(--step-2); }
+  h3 { font-size: var(--step-1); }
+
+  p, li, figcaption, blockquote { text-wrap: pretty; }
+  p { max-inline-size: 65ch; }
+
+  a {
+    color: var(--accent);
+    text-decoration-thickness: 0.07em;
+    text-underline-offset: 0.18em;
+    text-decoration-skip-ink: all;
+    touch-action: manipulation;
+  }
+
+  code {
+    font-family: ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
+    font-size: 0.9em;
+    background: color-mix(in oklch, var(--text) 7%, transparent);
+    padding: 0.1em 0.35em;
+    border-radius: calc(var(--radius) + 1px);
+  }
+
+  ::selection { background: var(--accent); color: var(--on-accent); }
+  /* Tier B upgrade: let the browser compute selection legibility. */
+  @supports (color: contrast-color(red)) {
+    ::selection { color: contrast-color(var(--accent)); }
+  }
+
+  /* Smooth in-page nav jumps, motion-gated; landing offset for anchors. */
+  @media (prefers-reduced-motion: no-preference) {
+    html { scroll-behavior: smooth; }
+  }
+  section[id] { scroll-margin-block-start: calc(var(--space) * 3); }
+
+  /* ---- Drop cap (Serene's signature; other themes zero the tokens).
+     Tier A fallback: floated, enlarged ::first-letter.
+     Tier C upgrade: real initial-letter, unprefixed + -webkit-. ---- */
+  article section:first-of-type > p:first-of-type::first-letter {
+    float: var(--dropcap-float);
+    font-size: var(--dropcap-size);
+    line-height: 0.82;
+    padding-inline-end: 0.09em;
+    font-weight: 600;
+    color: var(--accent);
+  }
+  @supports ((initial-letter: 3) or (-webkit-initial-letter: 3)) {
+    article section:first-of-type > p:first-of-type::first-letter {
+      float: none;
+      font-size: inherit;
+      padding-inline-end: 0.12em;
+      -webkit-initial-letter: var(--dropcap-initial);
+      initial-letter: var(--dropcap-initial);
+    }
+  }
+
+  /* Figure ornament inherits currentColor → recolors itself per theme. */
+  figure {
+    text-align: center;
+    color: var(--text-muted);
+    & svg { margin-inline: auto; inline-size: min(9rem, 40%); }
+    & .enso-stroke { stroke: currentColor; }
+    & .enso-stone  { fill: var(--accent); }
+    & figcaption {
+      font-size: var(--step--1);
+      font-style: italic;
+      max-inline-size: 34ch;
+      margin-inline: auto;
+      margin-block-start: calc(var(--space) / 2);
+    }
+  }
+
+  footer {
+    font-size: var(--step--1);
+    color: var(--text-muted);
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   5 · LAYOUT — one grid, addressed by named areas. Which architecture
+   those areas form is entirely up to the current theme's two structure
+   tokens. Same markup, different building.
+   ════════════════════════════════════════════════════════════════════ */
+@layer layout {
+  body {
+    min-block-size: 100dvh;
+    display: grid;
+    grid-template-columns: var(--page-cols);
+    grid-template-areas: var(--page-areas);
+    gap: var(--row-gap) var(--col-gap);
+    align-content: start;
+    align-items: start;
+    padding-block: var(--space) var(--space-l);
+    /* honor notches / home bars */
+    padding-inline: env(safe-area-inset-left) env(safe-area-inset-right);
+  }
+
+  .theme-switch  { grid-area: switch; }
+  .site-header   { grid-area: header; }
+  .site-nav      { grid-area: nav; }
+  main           { grid-area: main; }
+  .pull-quote    { grid-area: aside; }
+  .site-footer   { grid-area: footer; }
+
+  /* Shared "panel" chrome — invisible in Serene (tokens transparent),
+     becomes bordered blocks / glass / ASCII frames in other themes. */
+  main, .pull-quote, .site-nav, .theme-switch {
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: var(--radius);
+    padding: var(--panel-pad);
+  }
+
+  .site-header {
+    text-align: center;
+    & .tagline {
+      margin-block-start: calc(var(--space) / 2);
+      margin-inline: auto;
+      color: var(--text-muted);
+      font-style: italic;
+      font-size: var(--step-1);
+    }
+  }
+
+  .site-nav ul {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.35em 1.1em;
+    font-size: var(--step--1);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .site-nav a { text-decoration: none; padding-block: 0.5em; display: inline-block; }
+  .site-nav a:hover { text-decoration: underline; }
+  /* Serene separator dots — other themes override nav wholesale. */
+  .site-nav li + li::before {
+    content: "·";
+    margin-inline-end: 1.1em;
+    color: var(--text-muted);
+  }
+
+  article section + section { margin-block-start: var(--space-l); }
+  article section > * + * { margin-block-start: calc(var(--space) * 0.7); }
+  article h2 {
+    padding-block-end: 0.35em;
+    border-block-end: 1px solid var(--hairline);  /* Serene hairline rule */
+  }
+  article figure { margin-block: var(--space-l); }
+
+  .pull-quote {
+    text-align: center;
+    font-size: var(--step-1);
+    font-style: italic;
+    color: var(--text-muted);
+    padding-block: var(--space);
+    border-block: 1px solid var(--hairline);      /* Serene hairlines */
+    & cite { display: block; font-size: var(--step--1); font-style: normal;
+             letter-spacing: 0.14em; text-transform: uppercase;
+             margin-block-start: 0.8em; }
+  }
+
+  .site-footer { text-align: center; }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   6 · SWITCHER — four radios dressed as chips. The inputs stay real
+   (and focusable): they are visually clipped, and the chip label paints
+   checked + focus-visible state via :has(). Arrow keys change theme.
+   ════════════════════════════════════════════════════════════════════ */
+@layer switcher {
+  .theme-switch {
+    border: none;
+    text-align: center;
+  }
+  .theme-switch legend {
+    font-size: var(--step--1);
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-inline: auto;
+    padding-block-end: calc(var(--space) / 2);
+  }
+  .theme-switch .chips {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: calc(var(--space) / 2);
+  }
+  .chip {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 44px;               /* hit target */
+    padding: 0.45em 1.1em;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--surface-raised);
+    cursor: pointer;
+    user-select: none;
+    touch-action: manipulation;
+    font-size: var(--step--1);
+    letter-spacing: 0.06em;
+  }
+  /* Visually hidden, still focusable — keyboard flows through the group. */
+  .chip input {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    opacity: 0;
+    margin: 0;
+  }
+  .chip:has(input:checked) {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--on-accent);
+  }
+  .chip:has(input:focus-visible) {
+    outline: 3px solid var(--accent);
+    outline-offset: 3px;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .chip:not(:has(input:checked)):hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   7 · THEMES
+   ════════════════════════════════════════════════════════════════════ */
+@layer themes {
+
+  /* ──────────────────────────────────────────────────────────────────
+     7a · SERENE — already the default (tokens/base/layout above).
+     This sub-layer only adds flourishes that later theme sub-layers
+     are free to override by cascade-layer order.
+     ────────────────────────────────────────────────────────────────── */
+  @layer serene {
+    .site-header h1 {
+      font-variant-caps: small-caps;
+      letter-spacing: 0.04em;
+    }
+    article p { hyphens: auto; }
+  }
+
+  /* ──────────────────────────────────────────────────────────────────
+     7b · BRUTALIST — stark black/white/one-accent, massive uppercase
+     type, thick borders, offset hard shadows, exposed grid paper,
+     marquee-energy tagline (reduced-motion-safe: it simply stands
+     still). light-dark() flips it to white-on-black for dark-scheme
+     users — brutalism respects your OS too.
+     ────────────────────────────────────────────────────────────────── */
+  @layer brutalist {
+    :root:has(#theme-brutalist:checked) {
+      --surface:        light-dark(oklch(98.5% 0 0), oklch(13% 0 0));
+      --surface-raised: var(--surface);
+      --text:           light-dark(oklch(13% 0 0), oklch(97% 0 0));
+      --text-muted:     var(--text);              /* no soft grays here   */
+      --accent:         oklch(66% 0.23 33);       /* one safety-orange    */
+      --on-accent:      oklch(13% 0 0);
+      --border:         var(--text);
+      --hairline:       var(--text);
+
+      --font-body: "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+      --font-head: var(--font-body);
+      --step-3: clamp(2.6rem, 1.2rem + 7vw, 6.4rem);   /* MASSIVE h1 */
+      --step-2: clamp(1.7rem, 1.2rem + 2.4vw, 3.2rem);
+      --leading: 1.45;
+      --head-weight: 900;
+      --head-transform: uppercase;
+      --head-spacing: -0.015em;
+
+      --radius: 0px;
+      --shadow: 0.55rem 0.55rem 0 var(--text);    /* offset hard shadow  */
+      --panel-bg: var(--surface);
+      --panel-border: var(--text);
+      --panel-pad: var(--space);
+
+      /* Structure: full-bleed header/footer bands, essay + quote side
+         by side on an exposed grid. Same landmarks, new architecture. */
+      --page-cols: var(--space) minmax(0, 7fr) minmax(0, 4fr) var(--space);
+      --page-areas:
+        ".      switch switch ."
+        "header header header header"
+        ".      nav    nav    ."
+        ".      main   aside  ."
+        "footer footer footer footer";
+      --row-gap: var(--space);
+      --col-gap: var(--space);
+
+      /* kill the Serene drop cap via its own tokens */
+      --dropcap-float: none;
+      --dropcap-size: 1em;
+      --dropcap-initial: normal;
+    }
+
+    :root:has(#theme-brutalist:checked) body {
+      /* the grid, exposed */
+      background-image:
+        linear-gradient(to right,
+          color-mix(in oklch, var(--text) 9%, transparent) 1px, transparent 1px),
+        linear-gradient(to bottom,
+          color-mix(in oklch, var(--text) 9%, transparent) 1px, transparent 1px);
+      background-size: 3rem 3rem;
+    }
+
+    :root:has(#theme-brutalist:checked) {
+      & .site-header {
+        text-align: start;
+        background: var(--accent);
+        color: var(--on-accent);
+        border-block: 4px solid var(--text);
+        padding: var(--space-l) var(--space);
+      }
+      & .site-header h1 { font-variant-caps: normal; }
+
+      /* tagline becomes a marquee-energy ticker — motion-gated, so
+         reduced-motion users get a bold static banner instead */
+      & .site-header .tagline {
+        font-style: normal;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--on-accent);
+        max-inline-size: none;
+        overflow: clip;
+        white-space: nowrap;
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        & .site-header .tagline span {
+          display: inline-block;
+          padding-inline-start: 100%;
+          animation: ticker 16s linear infinite;
+        }
+      }
+
+      & .site-nav { border: 4px solid var(--text); box-shadow: var(--shadow); }
+      & .site-nav ul { justify-content: space-between; font-weight: 900; }
+      & .site-nav li + li::before { content: none; }
+      & .site-nav a { color: var(--text); padding: 0.5em 0.6em; }
+      & .site-nav a:hover {
+        background: var(--text);
+        color: var(--surface);
+        text-decoration: none;
+      }
+
+      & main, & .pull-quote { border-width: 4px; box-shadow: var(--shadow); }
+      & article h2 {
+        border-block-end-width: 4px;
+        background: var(--text);
+        color: var(--surface);
+        padding: 0.15em 0.35em;
+      }
+      & .pull-quote {
+        font-style: normal;
+        font-weight: 900;
+        text-transform: uppercase;
+        text-align: start;
+        font-size: var(--step-2);
+        line-height: 1.15;
+        background: var(--accent);
+        color: var(--on-accent);
+        border-block: 4px solid var(--text);
+        position: sticky;
+        inset-block-start: var(--space);
+      }
+      & figure { color: var(--text); }
+      & .site-footer {
+        border-block-start: 4px solid var(--text);
+        padding: var(--space);
+        text-align: start;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+      }
+      & .chip { border-width: 3px; border-radius: 0; font-weight: 900;
+                text-transform: uppercase; }
+      & .chip:has(input:checked) { box-shadow: 0.3rem 0.3rem 0 var(--text); }
+    }
+  }
+
+  /* ──────────────────────────────────────────────────────────────────
+     7c · TERMINAL — green-on-black monospace. Pins color-scheme: dark
+     (a CRT has no light mode) so native UI matches. Scanline overlay,
+     ASCII box-drawing frames via ::before/::after content (with empty
+     alt text so screen readers skip the ornament), blinking cursor
+     gated behind no-preference, nav re-imagined as a command list in
+     a sidebar grid area.
+     ────────────────────────────────────────────────────────────────── */
+  @layer terminal {
+    :root:has(#theme-terminal:checked) {
+      color-scheme: dark;                          /* sensible pin */
+      --surface:        oklch(16% 0.02 150);
+      --surface-raised: oklch(20% 0.03 150);
+      --text:           oklch(83% 0.15 148);       /* phosphor green */
+      --text-muted:     oklch(62% 0.10 148);
+      --accent:         oklch(87% 0.17 120);       /* brighter chartreuse */
+      --on-accent:      oklch(15% 0.03 148);
+      --border:         color-mix(in oklch, var(--text) 45%, var(--surface));
+      --hairline:       color-mix(in oklch, var(--text) 30%, var(--surface));
+
+      --font-body: ui-monospace, "Cascadia Code", "JetBrains Mono",
+                   Menlo, Consolas, "Liberation Mono", monospace;
+      --font-head: var(--font-body);
+      --step-3: clamp(1.5rem, 1.2rem + 1.6vw, 2.5rem);  /* terminals are humble */
+      --step-2: clamp(1.15rem, 1rem + 0.8vw, 1.6rem);
+      --step-1: clamp(1rem, 0.95rem + 0.3vw, 1.2rem);
+      --step-0: clamp(0.92rem, 0.88rem + 0.2vw, 1.05rem);
+      --leading: 1.7;
+      --head-weight: 700;
+      --head-transform: lowercase;
+      --head-spacing: 0;
+
+      --radius: 0px;
+      --shadow: 0 0 1.2rem oklch(80% 0.15 148 / 0.12);  /* phosphor glow */
+      --panel-bg: oklch(14% 0.015 150 / 0.6);
+      --panel-border: var(--border);
+      --panel-pad: var(--space);
+
+      /* Structure: persistent command-list sidebar, content beside it. */
+      --page-cols: minmax(var(--space), 1fr) 15rem minmax(0, 48rem)
+                   minmax(var(--space), 1fr);
+      --page-areas:
+        ". switch switch ."
+        ". header header ."
+        ". nav    main   ."
+        ". nav    aside  ."
+        ". footer footer .";
+      --row-gap: var(--space);
+      --col-gap: var(--space);
+
+      --dropcap-float: none;
+      --dropcap-size: 1em;
+      --dropcap-initial: normal;
+    }
+
+    :root:has(#theme-terminal:checked) body::after {
+      /* CRT scanlines + vignette. Fixed, inert, purely decorative. */
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background:
+        repeating-linear-gradient(to bottom,
+          transparent 0 2px,
+          oklch(80% 0.15 148 / 0.035) 2px 3px),
+        radial-gradient(ellipse at center,
+          transparent 60%, oklch(5% 0.01 150 / 0.5));
+    }
+
+    :root:has(#theme-terminal:checked) {
+      & h1, & h2 { text-shadow: 0 0 0.5rem oklch(83% 0.15 148 / 0.45); }
+
+      & .site-header { text-align: start; }
+      & .site-header h1 { font-variant-caps: normal; }
+      & .site-header h1::before { content: "~/garden $ cat "; color: var(--text-muted); }
+      & .site-header h1::after {
+        content: "▮";
+        margin-inline-start: 0.18em;
+        color: var(--accent);
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        & .site-header h1::after { animation: blink 1.1s steps(2, jump-none) infinite; }
+      }
+      & .site-header .tagline {
+        font-style: normal;
+        font-size: var(--step-0);
+        margin-inline: 0;
+        &::before { content: "# "; color: var(--text-muted); }
+      }
+
+      /* nav = command list, pinned in its sidebar area */
+      & .site-nav {
+        position: sticky;
+        inset-block-start: var(--space);
+      }
+      & .site-nav::before {
+        content: "┌─[ index ]─────┐" / "";
+        display: block;
+        color: var(--text-muted);
+        margin-block-end: 0.6em;
+      }
+      & .site-nav::after {
+        content: "└───────────────┘" / "";
+        display: block;
+        color: var(--text-muted);
+        margin-block-start: 0.6em;
+      }
+      & .site-nav ul {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.15em;
+        text-transform: lowercase;
+        letter-spacing: 0;
+        font-size: var(--step-0);
+      }
+      & .site-nav li + li::before { content: none; }
+      & .site-nav a { color: var(--text); display: block; padding: 0.35em 0.4em; }
+      & .site-nav a::before { content: "$ cd ./"; color: var(--text-muted); }
+      & .site-nav a:hover {
+        background: var(--text);
+        color: var(--surface);
+        text-decoration: none;
+        &::before { color: var(--surface); }
+      }
+
+      & article h2 { border-block-end-style: dashed; }
+      & article h2::before { content: "## "; color: var(--text-muted); }
+      & code { background: var(--surface-raised); color: var(--accent); }
+
+      /* ASCII-framed pull quote */
+      & .pull-quote {
+        text-align: start;
+        font-style: normal;
+        border-block: none;
+        color: var(--text);
+        &::before { content: "╔═══[ stdout ]═══╗" / ""; display: block;
+                    color: var(--text-muted); margin-block-end: 0.6em; }
+        &::after  { content: "╚════════════════╝" / ""; display: block;
+                    color: var(--text-muted); margin-block-start: 0.6em; }
+        & cite::before { content: "-- "; }
+      }
+
+      & figure { color: var(--text-muted); }
+      & .site-footer { text-align: start; }
+      & .site-footer p::before { content: "exit 0  # "; color: var(--text-muted); }
+
+      & .chip { border-radius: 0; background: transparent; }
+      & .chip:has(input:checked) { box-shadow: var(--shadow); }
+    }
+  }
+
+  /* ──────────────────────────────────────────────────────────────────
+     7d · AURORA — glassmorphic dark luxury. Animated oklch aurora
+     (conic + radial gradients, hue driven by the typed --aurora-angle
+     @property, motion-gated), backdrop-filter glass panels, squircle
+     corners behind @supports, glow shadows. color-scheme pinned dark —
+     glass needs a night sky behind it.
+     ────────────────────────────────────────────────────────────────── */
+  @layer aurora {
+    :root:has(#theme-aurora:checked) {
+      color-scheme: dark;
+      --surface:        oklch(15% 0.035 285);
+      --surface-raised: oklch(24% 0.05 290 / 0.5);
+      --text:           oklch(93% 0.02 300);
+      --text-muted:     oklch(74% 0.035 295);
+      --accent:         oklch(78% 0.13 195);       /* ice cyan */
+      --on-accent:      oklch(16% 0.04 220);
+      --border:         oklch(95% 0.04 300 / 0.22);
+      --hairline:       oklch(95% 0.04 300 / 0.16);
+
+      --font-body: system-ui, -apple-system, "Segoe UI", Roboto,
+                   "Helvetica Neue", sans-serif;
+      --font-head: var(--font-body);
+      --step-3: clamp(2.2rem, 1.5rem + 3vw, 4rem);
+      --leading: 1.6;
+      --head-weight: 250;                          /* variable-font light */
+      --head-transform: none;
+      --head-spacing: 0.02em;
+
+      --radius: 1.4rem;
+      --shadow: 0 0 0 1px oklch(95% 0.05 300 / 0.06),
+                0 1rem 3rem oklch(5% 0.05 290 / 0.5),
+                0 0 4rem oklch(60% 0.18 300 / 0.18);   /* the glow */
+      --panel-bg: oklch(26% 0.05 290 / 0.34);
+      --panel-border: var(--border);
+      --panel-pad: var(--space-l);
+
+      /* Structure: floating glass nav bar, wide essay + narrow floating
+         quote card. */
+      --page-cols: minmax(var(--space), 1fr) minmax(0, 42rem)
+                   minmax(0, 20rem) minmax(var(--space), 1fr);
+      --page-areas:
+        ". switch switch ."
+        ". nav    nav    ."
+        ". header header ."
+        ". main   aside  ."
+        ". footer footer .";
+      --row-gap: var(--space-l);
+      --col-gap: var(--space);
+
+      --dropcap-float: none;
+      --dropcap-size: 1em;
+      --dropcap-initial: normal;
+    }
+
+    :root:has(#theme-aurora:checked) body {
+      /* The aurora: layered radials over a slowly turning conic field,
+         all interpolated in oklch so midpoints never go muddy. The
+         conic's from-angle is the registered --aurora-angle, animated
+         below — @property makes the custom property itself tweenable. */
+      background:
+        radial-gradient(55rem 38rem at 12% 8%,
+          oklch(45% 0.17 305 / 0.5), transparent 68%),
+        radial-gradient(48rem 34rem at 88% 18%,
+          oklch(58% 0.15 200 / 0.4), transparent 68%),
+        radial-gradient(42rem 42rem at 55% 105%,
+          oklch(50% 0.17 160 / 0.35), transparent 70%),
+        conic-gradient(from var(--aurora-angle) at 50% 40% in oklch,
+          oklch(19% 0.06 285), oklch(15% 0.05 230),
+          oklch(18% 0.07 320), oklch(19% 0.06 285)),
+        var(--surface);
+      background-attachment: fixed;
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      :root:has(#theme-aurora:checked) body {
+        animation: aurora-drift 48s linear infinite;
+      }
+    }
+
+    :root:has(#theme-aurora:checked) {
+      /* Glass panels. Frosting is polish, not function — no guard
+         needed; browsers without backdrop-filter show the same
+         translucent fill a touch less frosted. */
+      & main, & .pull-quote, & .site-nav, & .theme-switch {
+        backdrop-filter: blur(18px) saturate(1.5);
+      }
+      /* Respect users who ask for less transparency (Tier C media). */
+      @media (prefers-reduced-transparency: reduce) {
+        & main, & .pull-quote, & .site-nav, & .theme-switch {
+          background: oklch(22% 0.04 290);
+          backdrop-filter: none;
+        }
+      }
+
+      & main, & .pull-quote { box-shadow: var(--shadow); }
+
+      & .site-nav {
+        position: sticky;
+        inset-block-start: var(--space);
+        z-index: 1;
+        padding: calc(var(--space) / 2) var(--space);
+        border-radius: 999px;
+      }
+      & .site-nav ul { text-transform: none; letter-spacing: 0.03em;
+                       font-size: var(--step-0); gap: 0.35em 1.6em; }
+      & .site-nav li + li::before { content: none; }
+      & .site-nav a { color: var(--text); }
+      & .site-nav a:hover { color: var(--accent); text-decoration: none; }
+
+      & .site-header h1 {
+        font-variant-caps: normal;
+        /* aurora-filled headline */
+        background: linear-gradient(100deg in oklch,
+          oklch(88% 0.09 305), oklch(85% 0.11 200), oklch(87% 0.10 160));
+        background-clip: text;
+        color: transparent;
+      }
+      & .site-header .tagline { font-style: normal; font-weight: 300; }
+
+      & article h2 { border-block-end: none; color: var(--accent);
+                     font-weight: 350; }
+      & .pull-quote {
+        border-block: none;
+        font-style: normal;
+        font-weight: 250;
+        font-size: var(--step-1);
+        color: var(--text);
+        position: sticky;
+        inset-block-start: calc(var(--space) * 4);
+      }
+      & code { background: oklch(95% 0.05 300 / 0.1); }
+
+      & .chip { background: var(--panel-bg); border-color: var(--border); }
+      & .chip:has(input:checked) {
+        background: var(--accent);
+        box-shadow: 0 0 1.5rem oklch(78% 0.13 195 / 0.5);
+      }
+
+      /* Tier C: squircle corners where supported; border-radius is the
+         universal fallback baked into every panel already. */
+      @supports (corner-shape: squircle) {
+        & main, & .pull-quote, & .theme-switch {
+          corner-shape: squircle;
+          border-radius: calc(var(--radius) * 1.6);
+        }
+      }
+    }
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   8 · MOTION — the theme swap itself is the transition. Interpolable
+   tokens (colors, radius, shadows) crossfade; discrete properties
+   (grid-template-areas, font-family, grid-template-columns with
+   mismatched track counts) flip at the 50% midpoint of the same fade
+   thanks to `allow-discrete` — so the page restructures mid-crossfade.
+   This is the pure-CSS stand-in for a View Transition (see header
+   comment for the one JS line we deliberately refuse to write).
+   Everything here is inside no-preference; reduced-motion swaps
+   instantly.
+   ════════════════════════════════════════════════════════════════════ */
+@layer motion {
+  @media (prefers-reduced-motion: no-preference) {
+    body {
+      transition:
+        background-color 0.6s ease,
+        color 0.6s ease,
+        grid-template-columns 0.6s ease,
+        grid-template-areas 0.6s allow-discrete,
+        font-family 0.6s allow-discrete;
+    }
+    main, .pull-quote, .site-nav, .site-header, .site-footer, .theme-switch,
+    .chip, article h2, code {
+      transition:
+        background-color 0.6s ease,
+        color 0.6s ease,
+        border-color 0.6s ease,
+        border-radius 0.6s ease,
+        box-shadow 0.6s ease,
+        text-shadow 0.6s ease;
+    }
+  }
+}
+
+@keyframes ticker       { to { translate: -100% 0; } }
+@keyframes blink        { 50% { opacity: 0; } }
+@keyframes aurora-drift { to { --aurora-angle: 400deg; } }
+
+/* ════════════════════════════════════════════════════════════════════
+   9 · RESPONSIVE — below reading width, every theme collapses to one
+   stacked column. This layer sits after `themes`, so a plain :root
+   rule outranks all four :has() scopes — layer order beats
+   specificity, which is exactly why the themes live in layers.
+   ════════════════════════════════════════════════════════════════════ */
+@layer responsive {
+  @media (max-width: 52rem) {
+    :root {
+      --page-cols: minmax(0, 1fr);
+      --page-areas: "switch" "header" "nav" "main" "aside" "footer";
+      --col-gap: 0px;
+    }
+    body { padding-inline: max(var(--space), env(safe-area-inset-left))
+                           max(var(--space), env(safe-area-inset-right)); }
+    .site-nav, .pull-quote { position: static; }
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   10 · A11Y — last layer, wins over everything below it.
+   ════════════════════════════════════════════════════════════════════ */
+@layer a11y {
+  :focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 3px;
+  }
+  /* Belt-and-suspenders kill switch: all decorative motion above is
+     already gated behind no-preference; this catches anything missed. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+  /* High-contrast forced palettes: keep chip boundaries perceivable. */
+  @media (forced-colors: active) {
+    .chip { border: 2px solid ButtonText; }
+    .chip:has(input:checked) { border-style: double; }
+  }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══ THE SWITCHER — real radios, real fieldset, zero JS ═══
+     Checking a chip flips :root:has(#theme-x:checked) scopes above. -->
+<fieldset class="theme-switch">
+  <legend>Choose a garden</legend>
+  <div class="chips">
+    <label class="chip">
+      <input type="radio" name="theme" id="theme-serene" checked>
+      <span>Serene</span>
+    </label>
+    <label class="chip">
+      <input type="radio" name="theme" id="theme-brutalist">
+      <span>Brutalist</span>
+    </label>
+    <label class="chip">
+      <input type="radio" name="theme" id="theme-terminal">
+      <span>Terminal</span>
+    </label>
+    <label class="chip">
+      <input type="radio" name="theme" id="theme-aurora">
+      <span>Aurora</span>
+    </label>
+  </div>
+</fieldset>
+
+<!-- ═══ ONE semantic document. Nothing below this line changes per
+     theme — only the stylesheet's opinion of it does. ═══ -->
+
+<header class="site-header">
+  <h1>The Modern CSS Garden</h1>
+  <p class="tagline"><span>One document, four gardens — every stone placed by the cascade, not a single line of JavaScript.</span></p>
+</header>
+
+<nav class="site-nav" aria-label="Essay sections">
+  <ul>
+    <li><a href="#cascade">Cascade</a></li>
+    <li><a href="#intrinsic">Layout</a></li>
+    <li><a href="#color">Color</a></li>
+    <li><a href="#motion">Motion</a></li>
+    <li><a href="#hacks">Post-JS</a></li>
+  </ul>
+</nav>
+
+<main>
+  <article>
+    <section id="cascade">
+      <h2>The cascade, layered at last</h2>
+      <p>For most of its life, the cascade was something authors fought rather
+      than used. Specificity wars bred entire methodologies — BEM's underscored
+      incantations, utility prefixes, the nuclear <code>!important</code> — all
+      of them elaborate treaties with an algorithm nobody trusted. Then
+      <code>@layer</code> arrived and made precedence something you declare in
+      one line instead of something you reverse-engineer at midnight.</p>
+      <p>This page is the argument made concrete: each of its four designs
+      lives in its own cascade layer, and the order of a single declaration at
+      the top of the stylesheet decides every conflict before it happens. The
+      cascade stopped being weather and became architecture.</p>
+    </section>
+
+    <section id="intrinsic">
+      <h2>Layouts that think for themselves</h2>
+      <p>We once measured the viewport in JavaScript, resized boxes by hand,
+      and shipped libraries whose whole job was arithmetic. Grid ended the
+      first era; container queries ended the second. A component now asks
+      <em>how much room do I have?</em> instead of <em>what device am I
+      on?</em> — and the difference is a layout that composes instead of one
+      that breaks.</p>
+      <p>The garden you are reading is a single grid whose
+      <code>grid-template-areas</code> are just a custom property. Swap the
+      token, and a centered essay becomes a sidebar terminal or an exposed
+      concrete slab — same landmarks, different building. The markup never
+      heard about any of it.</p>
+    </section>
+
+    <section id="color">
+      <h2>Color grows perceptual</h2>
+      <p>Hex codes were coordinates in a machine's color space, not a
+      designer's. <code>oklch()</code> changed the axes to the ones human eyes
+      actually use — lightness that looks even, chroma that saturates
+      honestly, hue that rotates without surprise mud. Add
+      <code>color-mix()</code> and relative color syntax, and a whole palette
+      becomes a few tokens plus arithmetic.</p>
+      <p>Every color on this page — cream paper, safety orange, phosphor
+      green, aurora violet — is derived in oklch from a handful of bases, and
+      <code>light-dark()</code> lets the serene garden follow your operating
+      system into the night without a duplicate token set.</p>
+    </section>
+
+    <figure role="img" aria-label="An ensō brush circle above three small stones">
+      <svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+        <circle class="enso-stroke" cx="60" cy="52" r="40"
+                fill="none" stroke-width="7" stroke-linecap="round"
+                pathLength="100" stroke-dasharray="86 14"
+                transform="rotate(-70 60 52)"/>
+        <ellipse class="enso-stone" cx="38" cy="106" rx="9" ry="5"/>
+        <ellipse class="enso-stone" cx="62" cy="109" rx="12" ry="6" opacity="0.7"/>
+        <ellipse class="enso-stone" cx="86" cy="105" rx="7" ry="4" opacity="0.45"/>
+      </svg>
+      <figcaption>The ensō: complete, imperfect, drawn in one stroke — like a
+      stylesheet with no script tags. This ornament is inline SVG stroked in
+      <code>currentColor</code>, so each garden repaints it for free.</figcaption>
+    </figure>
+
+    <section id="motion">
+      <h2>Motion leaves the main thread</h2>
+      <p>Animation used to mean a scroll listener, a timestamp, and a prayer
+      for sixty frames. The platform absorbed the whole genre:
+      <code>@starting-style</code> animates entrances, view transitions morph
+      whole states, and scroll-driven timelines run on the compositor while
+      your JavaScript thread does nothing at all.</p>
+      <p>Just as important, motion learned manners. One media query —
+      <code>prefers-reduced-motion</code> — gates every flourish in this
+      garden, so the blinking cursor, the drifting aurora, and the theme
+      crossfade all yield to a visitor who asked for stillness.</p>
+    </section>
+
+    <section id="hacks">
+      <h2>A quiet death for the JavaScript hack</h2>
+      <p>An entire generation of scripts existed to apologize for CSS: Popper
+      for positioning, focus traps for dialogs, checkbox hacks pretending to
+      be state machines. Anchor positioning, <code>&lt;dialog&gt;</code>,
+      popovers, and <code>:has()</code> retired them one by one — declaratively,
+      accessibly, for free.</p>
+      <p>The theme switcher above is the proof. Four radio buttons, one
+      <code>:root:has()</code> selector, and this entire page re-architects
+      itself — layout, typography, color, and motion — without a single event
+      listener. What we used to call an application is, increasingly, just a
+      stylesheet with opinions.</p>
+    </section>
+  </article>
+</main>
+
+<aside class="pull-quote" aria-label="Pull quote">
+  <blockquote>
+    <p>For twenty years we wrote JavaScript to apologize for CSS.
+    The apologies are over.</p>
+  </blockquote>
+  <cite>The Modern CSS Garden</cite>
+</aside>
+
+<footer class="site-footer">
+  <p>The Modern CSS Garden — a Zen Garden homage. Same HTML in every garden;
+  view source and find no script. Re-theme, resize, re-read.</p>
+</footer>
+
+</body>
+</html>

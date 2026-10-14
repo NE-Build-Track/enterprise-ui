@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "modern-css": {
+      "source": "mikezupper/modern-css-skill",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "ead1fb48ec8795e378f8b4c67a6770c937323861441fd963808f9449589e72d0"
+    }
+  }
+}

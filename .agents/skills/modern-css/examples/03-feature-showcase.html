@@ -1,0 +1,1299 @@
+<!doctype html>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+  THE MODERN CSS SHOW — a single-file tour of the platform's flashiest tricks
+  ═══════════════════════════════════════════════════════════════════════════
+  Built for the "modern-css" Agent Skill. Zero external resources, system
+  fonts, inline SVG only. Dark-first via color-scheme + light-dark(); fully
+  readable in light theme and with prefers-reduced-motion: reduce.
+
+  Features demonstrated (tier per references/feature-support.md, 2026-07-22):
+
+  Tier A — Baseline Widely Available (unguarded):
+    · Grid + named lines, flexbox + gap, aspect-ratio, logical properties
+    · :has() parent/state selection (pure-CSS state machine, §4)
+    · Native nesting, @layer cascade layers, :is()/:where()
+    · oklch(), color-mix(in oklch), conic-gradient()
+    · clamp() fluid type, trig functions cos()/sin() (§8 dial)
+    · scroll snap (carousel base, §9), overscroll-behavior
+    · backdrop-filter glass, mask-image patterns, clip-path (basic fallback)
+    · background-clip: text (§1), lh unit rhythm (§10)
+    · dvh/svh viewport units, :focus-visible, accent-color, ::marker
+    · content-visibility: auto + contain-intrinsic-size
+    · prefers-reduced-motion / prefers-color-scheme
+
+  Tier B — Baseline Newly Available (default; graceful without):
+    · @property typed custom properties — animated conic glow (§1, §11)
+    · Popover API + anchor positioning: position-anchor via implicit
+      popovertarget anchor, position-area, position-try-fallbacks (§3, §11)
+    · @starting-style + transition-behavior: allow-discrete (§3 popovers)
+    · Same-document view transitions: view-transition-name + JS-guarded
+      document.startViewTransition (§5)
+    · Relative color syntax oklch(from …) (§6 palette ramp)
+    · contrast-color() with manual cascade fallback (§6)
+    · light-dark() + color-scheme (whole page theme)
+    · clip-path: shape() blob with basic-shape cascade fallback (§7)
+    · text-wrap: balance / pretty (§10)
+
+  Tier C — Limited availability (all @supports-guarded, working fallbacks):
+    · Scroll-driven animations: animation-timeline: scroll()/view() —
+      progress bar, parallax, reveals (§2); content fine without
+    · CSS carousels: ::scroll-button() / ::scroll-marker (§9) over a
+      scroll-snap base that works everywhere
+    · corner-shape: squircle (§7, §11) falling back to border-radius
+    · sibling-index() stagger (§8) with :nth-child fallback
+    · text-box: trim-both cap alphabetic (§10)
+    · initial-letter drop cap (§10) with float first-letter fallback
+  Unsupported Tier C features surface a small inline "showing fallback" note
+  via @supports not (…) — the page teaches its own degradation.
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark light">
+<title>The Modern CSS Show</title>
+<style>
+/* ════════════════ 1 · LAYERS ════════════════ */
+@layer reset, tokens, base, layout, components, sections, utilities;
+
+/* ════════════════ 2 · RESET ════════════════ */
+@layer reset {
+  *, *::before, *::after { box-sizing: border-box; }
+  * { margin: 0; }
+  img, picture, video, canvas, svg { display: block; max-inline-size: 100%; }
+  input, button, textarea, select { font: inherit; }
+  p, h1, h2, h3, h4 { overflow-wrap: break-word; }
+}
+
+/* ════════════════ 3 · TOKENS ════════════════ */
+@layer tokens {
+  :root {
+    color-scheme: dark light; /* dark-first */
+
+    /* One hue in, a neon triad out. */
+    --hue: 195; /* electric cyan */
+    --brand:   light-dark(oklch(48% 0.14 var(--hue)), oklch(80% 0.15 var(--hue)));
+    --accent2: oklch(from var(--brand) l c calc(h + 120)); /* magenta  */
+    --accent3: oklch(from var(--brand) l c calc(h + 240)); /* lime     */
+
+    --surface:        light-dark(oklch(97% 0.008 var(--hue)), oklch(14% 0.02 var(--hue)));
+    --surface-deep:   light-dark(oklch(94% 0.012 var(--hue)), oklch(11% 0.02 var(--hue)));
+    --surface-raised: light-dark(oklch(100% 0 0),             oklch(19% 0.025 var(--hue)));
+    --text:           light-dark(oklch(21% 0.03 var(--hue)),  oklch(94% 0.015 var(--hue)));
+    --text-muted:     color-mix(in oklch, var(--text) 64%, var(--surface));
+    --border:         color-mix(in oklch, var(--text) 16%, var(--surface));
+    --brand-subtle:   color-mix(in oklch, var(--brand) 12%, var(--surface));
+
+    --glow: 0 0 24px color-mix(in oklch, var(--brand) 45%, transparent),
+            0 0 72px color-mix(in oklch, var(--brand) 22%, transparent);
+    --shadow: 0 1px 2px oklch(10% 0.02 var(--hue) / 0.25),
+              0 12px 32px oklch(10% 0.02 var(--hue) / 0.35);
+
+    --space: clamp(1rem, 0.5rem + 1.5vw, 1.75rem);
+    --step-0: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+    --step-1: clamp(1.25rem, 1.1rem + 0.7vw, 1.62rem);
+    --step-2: clamp(1.56rem, 1.3rem + 1.3vw, 2.33rem);
+    --step-3: clamp(2rem, 1.5rem + 2.6vw, 3.4rem);
+    --step-4: clamp(2.6rem, 1.8rem + 4.5vw, 5.2rem);
+
+    --radius: 14px;
+    --font-mono: ui-monospace, "Cascadia Code", "SF Mono", Menlo, Consolas, monospace;
+
+    accent-color: var(--brand);
+    scrollbar-color: var(--border) transparent;
+  }
+
+  /* Registered so they can genuinely animate / transition (Tier B). */
+  @property --angle { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+}
+
+/* ════════════════ 4 · BASE ════════════════ */
+@layer base {
+  body {
+    background: var(--surface);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: var(--step-0);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3 { text-wrap: balance; line-height: 1.12; }
+  p, li, figcaption { text-wrap: pretty; }
+  a { color: var(--brand); text-decoration-thickness: 0.08em;
+      text-underline-offset: 0.15em; text-decoration-skip-ink: all; }
+  code, pre { font-family: var(--font-mono); }
+  :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 4px; }
+  ::selection { background: var(--brand); color: var(--surface); }
+  @media (prefers-reduced-motion: no-preference) {
+    html { scroll-behavior: smooth; }
+  }
+}
+
+/* ════════════════ 5 · LAYOUT ════════════════ */
+@layer layout {
+  .panel {
+    padding-block: clamp(4rem, 10vh, 7rem);
+    padding-inline: var(--space);
+    border-block-end: 1px solid var(--border);
+  }
+  .panel:nth-of-type(even) { background: var(--surface-deep); }
+  .wrap { max-inline-size: 72rem; margin-inline: auto; }
+  /* Long page: skip rendering far-below-fold sections until needed. */
+  .panel:nth-of-type(n+4) {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 720px;
+  }
+  .duo {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(21rem, 100%), 1fr));
+    gap: calc(var(--space) * 1.25);
+    align-items: start;
+    margin-block-start: calc(var(--space) * 1.5);
+  }
+}
+
+/* ════════════════ 6 · SHARED COMPONENTS ════════════════ */
+@layer components {
+  .kicker {
+    display: inline-flex; align-items: center; gap: 0.6em;
+    font-size: 0.8rem; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--text-muted); margin-block-end: 0.75rem;
+  }
+  .tier {
+    font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em;
+    padding: 0.2em 0.65em; border-radius: 999px;
+    border: 1px solid color-mix(in oklch, var(--tier-c, var(--brand)) 55%, transparent);
+    color: var(--tier-c, var(--brand));
+    background: color-mix(in oklch, var(--tier-c, var(--brand)) 12%, transparent);
+  }
+  .tier-a { --tier-c: var(--accent3); }
+  .tier-b { --tier-c: var(--brand); }
+  .tier-cc { --tier-c: var(--accent2); }
+  .panel h2 { font-size: var(--step-3); margin-block-end: 0.35em; }
+  .lede { color: var(--text-muted); max-inline-size: 58ch; }
+
+  .snippet {
+    background: light-dark(oklch(20% 0.02 var(--hue)), oklch(10% 0.018 var(--hue)));
+    color: oklch(88% 0.02 var(--hue));
+    border: 1px solid color-mix(in oklch, var(--brand) 25%, transparent);
+    border-radius: var(--radius);
+    padding: var(--space);
+    font-size: 0.82rem;
+    line-height: 1.6;
+    overflow-x: auto;
+    box-shadow: var(--shadow);
+  }
+  .snippet mark {
+    background: color-mix(in oklch, var(--brand) 22%, transparent);
+    color: oklch(93% 0.09 var(--hue));
+    border-radius: 4px; padding-inline: 0.15em;
+  }
+  .snippet .c { color: oklch(62% 0.03 var(--hue)); } /* comment */
+
+  .demo-stage {
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: var(--space);
+    box-shadow: var(--shadow);
+  }
+
+  /* Inline "not supported" teaching notes — hidden unless fallback active. */
+  .supnote {
+    display: none;
+    margin-block-start: 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    border-inline-start: 3px solid var(--accent2);
+    padding-inline-start: 0.75em;
+  }
+  button, .btn {
+    touch-action: manipulation;
+    min-block-size: 44px;
+    cursor: pointer;
+  }
+}
+
+/* ════════════════ 7 · SECTIONS ════════════════ */
+@layer sections {
+
+/* ── §1 HERO — @property conic glow + background-clip: text ────────────── */
+.hero {
+  min-block-size: 100svh;
+  display: grid;
+  place-content: center;
+  text-align: center;
+  position: relative;
+  overflow: clip;
+  border-block-end: 1px solid var(--border);
+  padding: var(--space);
+}
+.hero .halo {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  inline-size: min(70vmin, 34rem);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: conic-gradient(from var(--angle) in oklch,
+    var(--brand), var(--accent2), var(--accent3), var(--brand));
+  filter: blur(72px);
+  opacity: 0.28;
+  pointer-events: none;
+}
+.hero h1 {
+  font-size: var(--step-4);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background: conic-gradient(from var(--angle) at 50% 120% in oklch,
+    var(--brand), var(--accent2), var(--accent3), var(--brand));
+  background-clip: text;
+  color: transparent;
+  position: relative;
+}
+.hero .lede { margin-inline: auto; margin-block-start: 1rem; position: relative; }
+@media (prefers-reduced-motion: no-preference) {
+  .hero h1, .hero .halo { animation: spin-angle 9s linear infinite; }
+}
+@keyframes spin-angle { to { --angle: 360deg; } }
+.scroll-hint {
+  position: absolute;
+  inset-block-end: calc(1.25rem + env(safe-area-inset-bottom));
+  inset-inline: 0;
+  display: grid; justify-items: center; gap: 0.4rem;
+  color: var(--text-muted); font-size: 0.8rem;
+}
+.scroll-hint svg { stroke: currentColor; }
+@media (prefers-reduced-motion: no-preference) {
+  .scroll-hint svg { animation: bob 1.8s ease-in-out infinite; }
+}
+@keyframes bob { 50% { translate: 0 6px; } }
+
+/* ── §2 SCROLL-DRIVEN — progress bar, parallax, reveals (Tier C) ───────── */
+.progress { display: none; }
+@supports (animation-timeline: scroll()) {
+  .progress {
+    display: block;
+    position: fixed;
+    inset-block-start: 0; inset-inline: 0;
+    block-size: 4px;
+    background: linear-gradient(90deg in oklch, var(--brand), var(--accent2), var(--accent3));
+    transform-origin: 0 50%;
+    scale: 0 1;
+    animation: grow-x linear both;
+    animation-timeline: scroll(root);
+    z-index: 10;
+  }
+}
+@keyframes grow-x { from { scale: 0 1; } to { scale: 1 1; } }
+
+.parallax-scene {
+  position: relative;
+  min-block-size: 46svh;
+  border-radius: var(--radius);
+  overflow: clip;
+  background: var(--surface-deep);
+  border: 1px solid var(--border);
+  display: grid; place-content: center; text-align: center;
+  margin-block-start: calc(var(--space) * 1.5);
+}
+.parallax-scene .layer {
+  position: absolute; border-radius: 50%; filter: blur(38px); opacity: 0.5;
+  pointer-events: none;
+}
+.layer-1 { inline-size: 42%; aspect-ratio: 1.4; background: var(--brand);   inset-block-start: -8%; inset-inline-start: -6%; }
+.layer-2 { inline-size: 34%; aspect-ratio: 1;   background: var(--accent2); inset-block-end: -12%; inset-inline-end: 4%; }
+.layer-3 { inline-size: 22%; aspect-ratio: 1;   background: var(--accent3); inset-block-start: 22%; inset-inline-end: 26%; opacity: 0.35; }
+.parallax-scene p { position: relative; max-inline-size: 34ch; margin-inline: auto; font-weight: 600; font-size: var(--step-1); }
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .parallax-scene .layer {
+      animation: drift linear both;
+      animation-timeline: view();
+      animation-range: cover 0% cover 100%;
+    }
+    .layer-1 { --drift: 9rem; }
+    .layer-2 { --drift: -13rem; }
+    .layer-3 { --drift: 5rem; }
+    .reveal {
+      animation: fade-up both;
+      animation-timeline: view();
+      animation-range: entry 0% cover 35%;
+    }
+  }
+}
+@keyframes drift { from { translate: 0 var(--drift, 6rem); } to { translate: 0 calc(var(--drift, 6rem) * -1); } }
+@keyframes fade-up { from { opacity: 0; translate: 0 26px; } }
+/* NOTE: .reveal elements are fully visible by default — opacity: 0 lives
+   only inside the keyframes, never outside the @supports guard. */
+.reveal-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr));
+  gap: var(--space);
+  margin-block-start: var(--space);
+}
+.reveal {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space);
+}
+.reveal strong { color: var(--brand); }
+@supports not (animation-timeline: scroll()) {
+  .supnote-sda { display: block; }
+}
+
+/* ── §3 ANCHOR POSITIONING — auto-flipping popovers (Tier B) ───────────── */
+.anchor-row {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-block-start: var(--space);
+}
+.anchor-row button {
+  border: 1px solid color-mix(in oklch, var(--brand) 45%, transparent);
+  background: var(--brand-subtle);
+  color: var(--text);
+  padding: 0.6em 1.1em;
+  border-radius: 999px;
+  transition: background 0.15s, box-shadow 0.15s;
+  &:hover { background: color-mix(in oklch, var(--brand) 22%, var(--surface)); box-shadow: var(--glow); }
+}
+.tip[popover] {
+  /* popovertarget gives an implicit anchor — zero anchor-name needed */
+  position: absolute;
+  position-area: block-end;
+  position-try-fallbacks: flip-block, flip-inline;
+  margin: 0.5rem;
+  inset: auto; /* clear UA centering */
+  max-inline-size: 20rem;
+  border: 1px solid color-mix(in oklch, var(--brand) 40%, transparent);
+  border-radius: var(--radius);
+  background: var(--surface-raised);
+  color: var(--text);
+  box-shadow: var(--shadow), var(--glow);
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  opacity: 0; translate: 0 6px;
+  transition: opacity 0.18s ease-out, translate 0.18s ease-out,
+              display 0.18s allow-discrete, overlay 0.18s allow-discrete;
+}
+.tip[popover]:popover-open { opacity: 1; translate: 0 0; }
+@starting-style {
+  .tip[popover]:popover-open { opacity: 0; translate: 0 6px; }
+}
+
+/* ── §4 :has() PLAYGROUND — pure-CSS state machine (Tier A) ────────────── */
+.hasdemo { --ph: var(--hue); }
+.hasdemo:has(#acc-magenta:checked) { --ph: calc(var(--hue) + 120); }
+.hasdemo:has(#acc-lime:checked)    { --ph: calc(var(--hue) + 240); }
+.hasdemo fieldset {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem;
+  margin-block-end: var(--space);
+}
+.hasdemo legend { padding-inline: 0.4em; color: var(--text-muted); font-size: 0.8rem;
+  text-transform: uppercase; letter-spacing: 0.1em; }
+.hasdemo label { display: inline-flex; align-items: center; gap: 0.45em; cursor: pointer; }
+.pcard {
+  --pc: oklch(from var(--brand) l c calc(h + (var(--ph) - 195)));
+  display: grid;
+  gap: 0.9rem;
+  background: var(--surface-raised);
+  border: 1px solid color-mix(in oklch, var(--pc) 40%, var(--border));
+  border-radius: var(--radius);
+  padding: var(--space);
+  max-inline-size: 34rem;
+  transition: border-color 0.3s, box-shadow 0.3s, grid-template-columns 0.3s;
+  position: relative;
+}
+.pcard .p-art {
+  aspect-ratio: 16 / 7;
+  border-radius: calc(var(--radius) - 6px);
+  background: linear-gradient(120deg in oklch,
+    var(--pc), color-mix(in oklch, var(--pc) 45%, var(--surface)));
+  transition: background 0.3s;
+}
+.pcard h3 { color: var(--pc); transition: color 0.3s; }
+.pcard .p-badge {
+  display: none;
+  position: absolute;
+  inset-block-start: 0.9rem; inset-inline-end: 0.9rem;
+  background: var(--pc); color: var(--surface);
+  font-size: 0.7rem; font-weight: 800; letter-spacing: 0.1em;
+  padding: 0.3em 0.7em; border-radius: 999px;
+}
+.hasdemo:has(#ex-badge:checked) .p-badge { display: block; }
+.hasdemo:has(#ex-glow:checked) .pcard {
+  box-shadow: 0 0 26px color-mix(in oklch, var(--pc) 45%, transparent),
+              0 0 80px color-mix(in oklch, var(--pc) 20%, transparent);
+}
+.hasdemo:has(#ex-wide:checked) .pcard {
+  grid-template-columns: 1fr 1.2fr;
+  align-items: center;
+  max-inline-size: none;
+  & .p-art { aspect-ratio: 4 / 3; grid-row: span 2; }
+}
+
+/* ── §5 VIEW TRANSITIONS — thumbnail → hero morph (Tier B, JS-guarded) ── */
+.vt-stage {
+  view-transition-name: vt-art;
+  aspect-ratio: 16 / 8;
+  border-radius: var(--radius);
+  background: var(--art, linear-gradient(130deg in oklch, var(--brand), var(--accent2)));
+  display: grid; place-content: center;
+  box-shadow: var(--shadow);
+}
+.vt-stage span {
+  font-weight: 800; font-size: var(--step-2); letter-spacing: -0.01em;
+  color: oklch(15% 0.02 var(--hue));
+  background: oklch(98% 0.005 var(--hue) / 0.65);
+  padding: 0.2em 0.7em; border-radius: 999px;
+  backdrop-filter: blur(6px);
+}
+.vt-thumbs { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-block-start: var(--space); }
+.vt-thumb {
+  inline-size: 6.5rem; aspect-ratio: 4 / 3;
+  border-radius: calc(var(--radius) - 5px);
+  border: 2px solid transparent;
+  background: var(--art) padding-box;
+  transition: scale 0.15s ease-out, border-color 0.15s;
+  &:hover { scale: 1.06; }
+  &[aria-pressed="true"] { border-color: var(--text); }
+}
+::view-transition-group(vt-art) { animation-duration: 340ms; }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) { animation: none !important; }
+}
+@supports not (view-transition-name: vt-art) {
+  .supnote-vt { display: block; }
+}
+
+/* ── §6 MODERN COLOR — oklch, relative color, contrast-color() (A/B) ──── */
+.color-lab { --chue: 195; }
+.hue-row { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.hue-row input[type="range"] { flex: 1 1 14rem; min-block-size: 44px; }
+.hue-readout {
+  font-family: var(--font-mono); font-size: 0.85rem;
+  color: oklch(70% 0.19 var(--chue));
+}
+.ramp { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.5rem; margin-block-start: var(--space); }
+.ramp .sw {
+  aspect-ratio: 1 / 0.75;
+  border-radius: calc(var(--radius) - 6px);
+  display: grid; place-content: center;
+  font-family: var(--font-mono); font-size: 0.75rem;
+  background: var(--sw);
+  transition: background 0.1s linear;
+}
+/* Derived ramp: same chroma+hue, stepped lightness (relative color syntax). */
+.sw-1 { --sw: oklch(88% 0.09 var(--chue)); color: black; }
+.sw-2 { --sw: oklch(74% 0.16 var(--chue)); color: black; }
+.sw-3 { --sw: oklch(60% 0.20 var(--chue)); color: white; }
+.sw-4 { --sw: oklch(46% 0.17 var(--chue)); color: white; }
+.sw-5 { --sw: oklch(32% 0.10 var(--chue)); color: white; }
+/* Tier B upgrade: let the browser pick legible text per swatch. The manual
+   black/white above is the cascade fallback. */
+.ramp .sw { color: contrast-color(var(--sw)); }
+.strips { display: grid; gap: 0.75rem; margin-block-start: var(--space); }
+.strip {
+  block-size: 3.25rem; border-radius: calc(var(--radius) - 6px);
+  display: grid; align-content: center; padding-inline: 1rem;
+  font-family: var(--font-mono); font-size: 0.78rem;
+  color: oklch(98% 0 0); text-shadow: 0 1px 3px oklch(0% 0 0 / 0.55);
+}
+.strip-oklch { background: linear-gradient(90deg in oklch, oklch(70% 0.19 var(--chue)), oklch(70% 0.19 calc(var(--chue) + 180))); }
+.strip-srgb  { background: linear-gradient(90deg in srgb,  oklch(70% 0.19 var(--chue)), oklch(70% 0.19 calc(var(--chue) + 180))); }
+
+/* ── §7 SHAPES & CORNERS — shape(), corner-shape, masked conic (B/C/A) ── */
+.shape-zoo {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(13rem, 100%), 1fr));
+  gap: var(--space);
+  margin-block-start: var(--space);
+  align-items: center;
+}
+.blob {
+  aspect-ratio: 1;
+  background: linear-gradient(140deg in oklch, var(--brand), var(--accent2));
+  /* Cascade fallback: browsers without shape() keep the ellipse. */
+  clip-path: ellipse(46% 42% at 50% 50%);
+  clip-path: shape(from 52% 2%,
+    curve to 96% 46% with 92% 6%,
+    curve to 58% 98% with 99% 88%,
+    curve to 4% 60% with 18% 106%,
+    curve to 52% 2% with -10% 8%);
+}
+.squircle-row { display: grid; gap: 0.75rem; }
+.squircle {
+  background: var(--surface-raised);
+  border: 1px solid color-mix(in oklch, var(--accent3) 45%, var(--border));
+  border-radius: var(--radius);
+  padding: 0.9rem 1.1rem;
+  font-size: 0.9rem;
+}
+@supports (corner-shape: squircle) {
+  .squircle { corner-shape: squircle; border-radius: calc(var(--radius) * 1.8); }
+}
+@supports not (corner-shape: squircle) {
+  .supnote-squircle { display: block; }
+}
+.dotfield {
+  aspect-ratio: 1;
+  border-radius: var(--radius);
+  background: conic-gradient(from var(--angle) in oklch,
+    var(--brand), var(--accent2), var(--accent3), var(--brand));
+  mask-image: radial-gradient(circle at center, #000 4.5px, #0000 5.5px);
+  mask-size: 20px 20px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .dotfield { animation: spin-angle 14s linear infinite; }
+}
+.shape-zoo figcaption {
+  text-align: center; font-size: 0.8rem; color: var(--text-muted);
+  margin-block-start: 0.5rem; font-family: var(--font-mono);
+}
+
+/* ── §8 STAGGER & MATH — sibling-index() (C) + trig dial (A) ───────────── */
+.stagger-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(3.5rem, 1fr));
+  gap: 0.6rem;
+}
+.stagger-grid > i {
+  aspect-ratio: 1;
+  border-radius: 10px;
+  background: color-mix(in oklch, var(--brand) 26%, var(--surface-raised));
+  border: 1px solid color-mix(in oklch, var(--brand) 35%, transparent);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .stagger-grid > i { animation: tile-pulse 2.8s ease-in-out infinite; }
+  /* Tier C stagger — adapts to any item count automatically. */
+  @supports (animation-delay: calc(sibling-index() * 1ms)) {
+    .stagger-grid > i { animation-delay: calc(sibling-index() * 110ms); }
+  }
+  /* Fallback stagger: coarse but convincing. */
+  @supports not (animation-delay: calc(sibling-index() * 1ms)) {
+    .stagger-grid > i:nth-child(3n)   { animation-delay: 350ms; }
+    .stagger-grid > i:nth-child(3n+1) { animation-delay: 700ms; }
+    .stagger-grid > i:nth-child(4n)   { animation-delay: 1050ms; }
+  }
+}
+@keyframes tile-pulse {
+  35% { background: color-mix(in oklch, var(--accent2) 60%, var(--surface-raised));
+        box-shadow: 0 0 18px color-mix(in oklch, var(--accent2) 45%, transparent);
+        scale: 1.08; }
+}
+@supports not (animation-delay: calc(sibling-index() * 1ms)) {
+  .supnote-sibling { display: block; }
+}
+.dial {
+  position: relative;
+  aspect-ratio: 1;
+  max-inline-size: 20rem;
+  margin-inline: auto;
+}
+.dial i {
+  --a: calc(var(--i) * 30deg);
+  position: absolute;
+  inset: 0; margin: auto;
+  inline-size: 1.4rem; aspect-ratio: 1;
+  border-radius: 50%;
+  background: oklch(75% 0.19 calc(var(--hue) + var(--i) * 30));
+  box-shadow: 0 0 14px oklch(75% 0.19 calc(var(--hue) + var(--i) * 30) / 0.6);
+  /* Pure math, no JS: each dot places itself on the circle. */
+  translate: calc(cos(var(--a)) * min(38cqi, 8.5rem))
+             calc(sin(var(--a)) * min(38cqi, 8.5rem) * -1);
+}
+.dial-wrap { container-type: inline-size; }
+.dial .hub {
+  position: absolute; inset: 0; margin: auto;
+  inline-size: fit-content; block-size: fit-content;
+  font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted);
+}
+
+/* ── §9 PURE-CSS CAROUSEL — snap base (A) + generated controls (C) ─────── */
+.reel {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: min(78%, 30rem);
+  gap: var(--space);
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scroll-padding-inline: var(--space);
+  padding-block-end: 0.5rem;
+  scrollbar-width: thin;
+}
+.reel > article {
+  scroll-snap-align: center;
+  aspect-ratio: 16 / 8;
+  border-radius: var(--radius);
+  display: grid; place-content: center; text-align: center;
+  color: oklch(15% 0.02 var(--hue));
+  font-weight: 800; font-size: var(--step-2);
+  background: linear-gradient(135deg in oklch,
+    oklch(78% 0.16 calc(var(--hue) + var(--slide) * 55)),
+    oklch(60% 0.2  calc(var(--hue) + var(--slide) * 55 + 40)));
+}
+@supports selector(::scroll-button(*)) {
+  .reel { scrollbar-width: none; scroll-marker-group: after; }
+  .reel::scroll-button(inline-start) { content: "‹" / "Previous slide"; }
+  .reel::scroll-button(inline-end)   { content: "›" / "Next slide"; }
+  .reel::scroll-button(*) {
+    inline-size: 2.75rem; block-size: 2.75rem;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--surface-raised);
+    color: var(--text);
+    font-size: 1.4rem;
+    margin: 0.5rem 0.25rem 0 0;
+  }
+  .reel::scroll-button(*):disabled { opacity: 0.35; }
+  .reel::scroll-button(*):focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+  .reel::scroll-marker-group {
+    display: flex; gap: 0.5rem; justify-content: center; margin-block-start: 0.75rem;
+  }
+  .reel > article::scroll-marker {
+    content: "" / "Go to slide";
+    inline-size: 0.65rem; aspect-ratio: 1; border-radius: 50%;
+    background: var(--border);
+  }
+  .reel > article::scroll-marker:target-current { background: var(--brand); box-shadow: var(--glow); }
+}
+@supports not (selector(::scroll-button(*))) {
+  .supnote-reel { display: block; }
+}
+
+/* ── §10 TYPE EFFECTS — balance/pretty (B), text-box, lh, drop cap (C/A) ── */
+.type-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(19rem, 100%), 1fr));
+  gap: var(--space);
+  margin-block-start: var(--space);
+}
+.type-card {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--space);
+}
+.type-card > h3 {
+  font-size: 0.78rem; font-family: var(--font-mono); font-weight: 600;
+  color: var(--accent3); margin-block-end: 0.75rem; letter-spacing: 0.05em;
+}
+.wrap-demo h4 { font-size: var(--step-1); max-inline-size: 17ch; }
+.wrap-demo .balanced h4 { text-wrap: balance; }
+.wrap-demo .unbalanced h4 { text-wrap: initial; }
+.wrap-demo > div + div { margin-block-start: 1rem; padding-block-start: 1rem; border-block-start: 1px dashed var(--border); }
+.wrap-demo small { color: var(--text-muted); font-family: var(--font-mono); font-size: 0.72rem; }
+
+.trim-demo { display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; }
+.pill {
+  display: inline-block;
+  background: var(--brand-subtle);
+  border: 1px solid color-mix(in oklch, var(--brand) 45%, transparent);
+  border-radius: 999px;
+  padding: 0.85em 1.2em;
+  font-weight: 700;
+}
+@supports (text-box: trim-both cap alphabetic) {
+  .pill.trimmed { text-box: trim-both cap alphabetic; }
+}
+@supports not (text-box: trim-both cap alphabetic) {
+  .supnote-textbox { display: block; }
+}
+
+.rhythm {
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0 calc(1lh - 1px),
+    color-mix(in oklch, var(--brand) 30%, transparent) calc(1lh - 1px) 1lh);
+}
+.rhythm p { margin-block: 1lh; }
+.rhythm p:first-child { margin-block-start: 0; }
+
+.dropcap p { max-inline-size: 52ch; }
+@supports (initial-letter: 3) {
+  .dropcap p::first-letter {
+    initial-letter: 3 3;
+    color: var(--accent2);
+    font-weight: 800;
+    margin-inline-end: 0.5rem;
+  }
+}
+@supports not (initial-letter: 3) {
+  .dropcap p::first-letter {
+    float: inline-start;
+    font-size: 3.2em; line-height: 0.85;
+    color: var(--accent2); font-weight: 800;
+    margin-inline-end: 0.4rem; margin-block-start: 0.08em;
+  }
+  .supnote-dropcap { display: block; }
+}
+
+/* ── §11 FINALE — glass + squircle + animated border + anchor tip ──────── */
+.finale-bg {
+  position: relative;
+  border-radius: var(--radius);
+  overflow: clip;
+  padding: clamp(2rem, 6vw, 4.5rem);
+  background:
+    radial-gradient(60% 80% at 20% 10%, color-mix(in oklch, var(--brand) 55%, transparent), transparent 70%),
+    radial-gradient(50% 70% at 85% 30%, color-mix(in oklch, var(--accent2) 50%, transparent), transparent 70%),
+    radial-gradient(55% 65% at 55% 95%, color-mix(in oklch, var(--accent3) 45%, transparent), transparent 70%),
+    var(--surface-deep);
+  display: grid; place-content: center;
+  min-block-size: 60svh;
+}
+.finale-card {
+  position: relative;
+  max-inline-size: 30rem;
+  padding: calc(var(--space) * 1.4);
+  border-radius: calc(var(--radius) * 1.6);
+  /* Animated gradient border: two backgrounds, one typed angle. */
+  border: 1.5px solid transparent;
+  background:
+    color-mix(in oklch, var(--surface) 62%, transparent) padding-box,
+    conic-gradient(from var(--angle) in oklch,
+      var(--brand), var(--accent2), var(--accent3), var(--brand)) border-box;
+  backdrop-filter: blur(18px) saturate(1.4);
+  box-shadow: var(--shadow), var(--glow);
+  display: grid; gap: 0.9rem;
+}
+@supports (corner-shape: squircle) {
+  .finale-card { corner-shape: squircle; border-radius: calc(var(--radius) * 2.4); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .finale-card { animation: spin-angle 7s linear infinite; }
+}
+.finale-card h3 { font-size: var(--step-2); }
+.finale-card .row { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; }
+.finale-card .row button {
+  border: 1px solid color-mix(in oklch, var(--brand) 50%, transparent);
+  background: var(--brand); color: var(--surface);
+  font-weight: 700;
+  padding: 0.55em 1.2em; border-radius: 999px;
+}
+
+footer.colophon {
+  padding: calc(var(--space) * 2) var(--space);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+} /* end @layer sections */
+
+/* ════════════════ 8 · UTILITIES + KILL-SWITCH ════════════════ */
+@layer utilities {
+  .visually-hidden {
+    position: absolute; inline-size: 1px; block-size: 1px;
+    overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="progress" aria-hidden="true"></div>
+
+<!-- ═══ §1 HERO ═══ -->
+<header class="hero">
+  <div class="halo" aria-hidden="true"></div>
+  <p class="kicker">One file · zero libraries <span class="tier tier-b">@property · Tier B</span></p>
+  <h1>The Modern CSS Show</h1>
+  <p class="lede">Eleven acts of platform-native flash: typed custom properties spinning
+     this very headline through an oklch conic gradient, clipped to the text.
+     No canvas, no JavaScript animation loop.</p>
+  <div class="scroll-hint">
+    <span>scroll</span>
+    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke-width="2" aria-hidden="true">
+      <path d="M4 7l6 6 6-6"></path>
+    </svg>
+  </div>
+</header>
+
+<main>
+
+<!-- ═══ §2 SCROLL-DRIVEN ANIMATIONS ═══ -->
+<section class="panel" aria-labelledby="t-scroll">
+  <div class="wrap">
+    <p class="kicker">Act 2 <span class="tier tier-cc">Scroll-driven animations · Tier C</span></p>
+    <h2 id="t-scroll">The scrollbar is the timeline</h2>
+    <p class="lede">The progress bar pinned to the top of this page, the drifting
+       blobs below, and the cards fading in are all
+       <code>animation-timeline</code> — compositor-driven, zero scroll listeners.
+       Unsupported browsers simply see everything, static.</p>
+
+    <div class="parallax-scene">
+      <div class="layer layer-1" aria-hidden="true"></div>
+      <div class="layer layer-2" aria-hidden="true"></div>
+      <div class="layer layer-3" aria-hidden="true"></div>
+      <p>These blobs move at three different speeds as you scroll.</p>
+    </div>
+
+    <div class="reveal-row">
+      <div class="reveal"><strong>scroll(root)</strong><p>drives the fixed progress bar from page top to bottom.</p></div>
+      <div class="reveal"><strong>view()</strong><p>runs each card's fade as it crosses the viewport.</p></div>
+      <div class="reveal"><strong>animation-range</strong><p>maps <code>entry 0% → cover 35%</code> so reveals finish early.</p></div>
+    </div>
+    <p class="supnote supnote-sda">Scroll-driven animations aren't supported in this
+       browser — showing the fallback: all content rendered fully visible, no
+       progress bar. That's the guard doing its job.</p>
+
+    <div class="duo">
+      <div></div>
+      <pre class="snippet"><code><span class="c">/* Tier C: everything inside the guard */</span>
+@supports (animation-timeline: scroll()) {
+  .progress {
+    <mark>animation-timeline: scroll(root);</mark>
+    animation: grow-x linear both;
+  }
+  .reveal {
+    <mark>animation-timeline: view();</mark>
+    <mark>animation-range: entry 0% cover 35%;</mark>
+  }
+}</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ §3 ANCHOR POSITIONING ═══ -->
+<section class="panel" aria-labelledby="t-anchor">
+  <div class="wrap">
+    <p class="kicker">Act 3 <span class="tier tier-b">Anchor positioning · Tier B</span></p>
+    <h2 id="t-anchor">Popovers that refuse to fall off the screen</h2>
+    <p class="lede">Each button below invokes a popover anchored to it —
+       <code>popovertarget</code> creates the anchor implicitly, and
+       <code>position-try-fallbacks</code> auto-flips it away from viewport
+       edges. Try the first and last buttons, then resize the window narrow
+       and try again. Not one line of positioning JavaScript.</p>
+
+    <div class="anchor-row">
+      <button popovertarget="tip-1">⇤ Left edge</button>
+      <button popovertarget="tip-2">Center</button>
+      <button popovertarget="tip-3">Also center</button>
+      <button popovertarget="tip-4">Right edge ⇥</button>
+    </div>
+    <div id="tip-1" class="tip" popover>Anchored to the left-most button. If I would
+      overflow the left edge, <code>flip-inline</code> slides me back in.</div>
+    <div id="tip-2" class="tip" popover>Default placement is <code>position-area:
+      block-end</code> — right under my anchor.</div>
+    <div id="tip-3" class="tip" popover>Scroll me near the bottom of the viewport and
+      reopen: <code>flip-block</code> pops me above the button instead.</div>
+    <div id="tip-4" class="tip" popover>Right-edge case. Popper.js used to be an entire
+      dependency for what is now three declarations.</div>
+
+    <div class="duo">
+      <div></div>
+      <pre class="snippet"><code>&lt;button <mark>popovertarget="tip"</mark>&gt;Open&lt;/button&gt;
+&lt;div id="tip" popover&gt;…&lt;/div&gt;
+
+[popover] {          <span class="c">/* implicit anchor! */</span>
+  position: absolute; inset: auto;
+  <mark>position-area: block-end;</mark>
+  <mark>position-try-fallbacks: flip-block, flip-inline;</mark>
+}</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ §4 :has() PLAYGROUND ═══ -->
+<section class="panel" aria-labelledby="t-has">
+  <div class="wrap">
+    <p class="kicker">Act 4 <span class="tier tier-a">:has() · Tier A</span></p>
+    <h2 id="t-has">A state machine with no state</h2>
+    <p class="lede">Every control below restyles the preview card through pure
+       selectors — <code>.demo:has(#option:checked)</code>. No event listeners,
+       no framework, no re-render. The form <em>is</em> the store.</p>
+
+    <div class="hasdemo duo">
+      <form>
+        <fieldset>
+          <legend>Accent hue</legend>
+          <label><input type="radio" name="acc" id="acc-cyan" checked> Cyan</label>
+          <label><input type="radio" name="acc" id="acc-magenta"> Magenta</label>
+          <label><input type="radio" name="acc" id="acc-lime"> Lime</label>
+        </fieldset>
+        <fieldset>
+          <legend>Modifiers</legend>
+          <label><input type="checkbox" id="ex-badge"> Badge</label>
+          <label><input type="checkbox" id="ex-glow"> Neon glow</label>
+          <label><input type="checkbox" id="ex-wide"> Wide layout</label>
+        </fieldset>
+        <pre class="snippet"><code><span class="c">/* parent selects itself by its children */</span>
+.demo<mark>:has(#acc-magenta:checked)</mark> { --ph: 315; }
+.demo<mark>:has(#ex-glow:checked)</mark> .card {
+  box-shadow: 0 0 26px
+    color-mix(in oklch, var(--pc) 45%, transparent);
+}</code></pre>
+      </form>
+      <article class="pcard">
+        <span class="p-badge">NEW</span>
+        <div class="p-art" aria-hidden="true"></div>
+        <h3>Preview card</h3>
+        <p>My hue, glow, badge and even my grid layout are decided by
+           checkboxes I have never met, thanks to a parent selector CSS waited
+           twenty years for.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ §5 VIEW TRANSITIONS ═══ -->
+<section class="panel" aria-labelledby="t-vt">
+  <div class="wrap">
+    <p class="kicker">Act 5 <span class="tier tier-b">View transitions · Tier B</span></p>
+    <h2 id="t-vt">Click a thumbnail — watch it become the hero</h2>
+    <p class="lede">One shared <code>view-transition-name</code> and a
+       four-line JS wrapper around the DOM change. The browser snapshots old
+       and new states and morphs between them. Without support, the swap is
+       instant — still perfectly functional.</p>
+
+    <div class="duo">
+      <div>
+        <div class="vt-stage" id="vt-stage" style="--art: linear-gradient(130deg in oklch, oklch(78% 0.15 195), oklch(62% 0.2 315))">
+          <span id="vt-label">Aurora</span>
+        </div>
+        <div class="vt-thumbs">
+          <button class="vt-thumb" aria-pressed="true"  data-label="Aurora"  style="--art: linear-gradient(130deg in oklch, oklch(78% 0.15 195), oklch(62% 0.2 315))"><span class="visually-hidden">Show Aurora</span></button>
+          <button class="vt-thumb" aria-pressed="false" data-label="Magma"   style="--art: linear-gradient(130deg in oklch, oklch(70% 0.19 40), oklch(55% 0.22 20))"><span class="visually-hidden">Show Magma</span></button>
+          <button class="vt-thumb" aria-pressed="false" data-label="Reef"    style="--art: linear-gradient(130deg in oklch, oklch(80% 0.16 160), oklch(60% 0.15 220))"><span class="visually-hidden">Show Reef</span></button>
+          <button class="vt-thumb" aria-pressed="false" data-label="Ultra"   style="--art: linear-gradient(130deg in oklch, oklch(65% 0.24 300), oklch(75% 0.17 260))"><span class="visually-hidden">Show Ultra</span></button>
+        </div>
+        <p class="supnote supnote-vt">View transitions aren't supported in this
+           browser — showing the fallback: thumbnails still swap the hero,
+           just without the morph.</p>
+      </div>
+      <pre class="snippet"><code>.stage { <mark>view-transition-name: vt-art;</mark> }
+
+<span class="c">// the only JS: wrap the state change</span>
+const swap = () =&gt; applyArt(btn);
+document.startViewTransition
+  ? <mark>document.startViewTransition(swap)</mark>
+  : swap();</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ §6 MODERN COLOR ═══ -->
+<section class="panel color-lab" aria-labelledby="t-color">
+  <div class="wrap">
+    <p class="kicker">Act 6 <span class="tier tier-b">oklch · relative color · contrast-color() · Tier A/B</span></p>
+    <h2 id="t-color">One slider, an entire design system</h2>
+    <p class="lede">Drag the hue. The five-swatch ramp is <em>derived</em> —
+       same chroma curve, stepped lightness — and each swatch label picks its
+       own legible color via <code>contrast-color()</code>. Below, the same
+       two endpoint colors interpolated in oklch vs sRGB: note the mud.</p>
+
+    <div class="hue-row">
+      <label for="hue">Hue</label>
+      <input type="range" id="hue" min="0" max="360" value="195" step="1">
+      <output class="hue-readout" for="hue">oklch(· · <span id="hue-val">195</span>)</output>
+    </div>
+
+    <div class="ramp" role="img" aria-label="Five-step lightness ramp derived from the chosen hue">
+      <div class="sw sw-1">88%</div>
+      <div class="sw sw-2">74%</div>
+      <div class="sw sw-3">60%</div>
+      <div class="sw sw-4">46%</div>
+      <div class="sw sw-5">32%</div>
+    </div>
+
+    <div class="strips">
+      <div class="strip strip-oklch">linear-gradient(90deg <b>in oklch</b>, hue, hue+180) — even, vivid</div>
+      <div class="strip strip-srgb">linear-gradient(90deg <b>in srgb</b>, hue, hue+180) — gray dead-zone mid-way</div>
+    </div>
+
+    <div class="duo">
+      <div></div>
+      <pre class="snippet"><code><span class="c">/* 3 lines of JS set --chue; CSS does the rest */</span>
+.sw-3 { --sw: oklch(60% 0.2 <mark>var(--chue)</mark>); }
+.sw   { color: <mark>contrast-color(var(--sw))</mark>; }
+.strip-oklch {
+  background: linear-gradient(90deg <mark>in oklch</mark>,
+    oklch(70% .19 var(--chue)),
+    oklch(70% .19 calc(var(--chue) + 180)));
+}</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ §7 SHAPES & CORNERS ═══ -->
+<section class="panel" aria-labelledby="t-shapes">
+  <div class="wrap">
+    <p class="kicker">Act 7 <span class="tier tier-cc">shape() · corner-shape · mask — Tier B/C/A</span></p>
+    <h2 id="t-shapes">Geometry without a single image file</h2>
+    <p class="lede">A responsive Bézier blob from <code>clip-path: shape()</code>
+       (falling back to an ellipse via the cascade), squircle cards from
+       <code>corner-shape</code>, and a slowly turning conic gradient seen
+       through a dot-grid mask.</p>
+
+    <div class="shape-zoo">
+      <figure>
+        <div class="blob"></div>
+        <figcaption>clip-path: shape(…)</figcaption>
+      </figure>
+      <figure>
+        <div class="squircle-row">
+          <div class="squircle">Squircle corners — continuous curvature, like hardware.</div>
+          <div class="squircle">Unsupported? You get plain border-radius. Nobody is hurt.</div>
+          <div class="squircle">One property, guarded: <code>corner-shape: squircle</code>.</div>
+        </div>
+        <figcaption>corner-shape: squircle</figcaption>
+        <p class="supnote supnote-squircle">corner-shape isn't supported in this
+           browser — showing the fallback: standard rounded corners.</p>
+      </figure>
+      <figure>
+        <div class="dotfield"></div>
+        <figcaption>conic-gradient + mask-size</figcaption>
+      </figure>
+    </div>
+
+    <div class="duo">
+      <div></div>
+      <pre class="snippet"><code>.blob {
+  clip-path: ellipse(46% 42%);  <span class="c">/* fallback first */</span>
+  <mark>clip-path: shape(from 52% 2%,</mark>
+    <mark>curve to 96% 46% with 92% 6%, …);</mark>
+}
+@supports (corner-shape: squircle) {
+  .card { <mark>corner-shape: squircle;</mark> }
+}
+.dots { mask-image: radial-gradient(circle, #000 4.5px, #0000 5.5px);
+        <mark>mask-size: 20px 20px;</mark> }</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ §8 STAGGER & MATH ═══ -->
+<section class="panel" aria-labelledby="t-math">
+  <div class="wrap">
+    <p class="kicker">Act 8 <span class="tier tier-cc">sibling-index() · Tier C — trig · Tier A</span></p>
+    <h2 id="t-math">CSS can count, and it knows trigonometry</h2>
+    <p class="lede">Left: a wave rippling through the grid,
+       delay = <code>sibling-index() × 110ms</code> — no per-item classes,
+       adapts to any tile count (with an <code>:nth-child</code> fallback
+       ripple). Right: twelve dots placing themselves on a circle with
+       <code>cos()</code> and <code>sin()</code>. Zero JavaScript in this
+       entire section.</p>
+
+    <div class="duo">
+      <div>
+        <div class="stagger-grid" aria-hidden="true">
+          <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+          <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+        </div>
+        <p class="supnote supnote-sibling">sibling-index() isn't supported in this
+           browser — showing the fallback: a coarser :nth-child stagger.</p>
+      </div>
+      <div class="dial-wrap">
+        <div class="dial" aria-hidden="true">
+          <i style="--i:0"></i><i style="--i:1"></i><i style="--i:2"></i>
+          <i style="--i:3"></i><i style="--i:4"></i><i style="--i:5"></i>
+          <i style="--i:6"></i><i style="--i:7"></i><i style="--i:8"></i>
+          <i style="--i:9"></i><i style="--i:10"></i><i style="--i:11"></i>
+          <span class="hub">cos · sin</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="duo">
+      <div></div>
+      <pre class="snippet"><code>@supports (animation-delay: calc(sibling-index() * 1ms)) {
+  .grid &gt; i { animation-delay:
+    <mark>calc(sibling-index() * 110ms)</mark>; }
+}
+.dial i {
+  --a: calc(var(--i) * 30deg);
+  translate: <mark>calc(cos(var(--a)) * 8.5rem)</mark>
+             <mark>calc(sin(var(--a)) * -8.5rem)</mark>;
+}</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ §9 PURE-CSS CAROUSEL ═══ -->
+<section class="panel" aria-labelledby="t-reel">
+  <div class="wrap">
+    <p class="kicker">Act 9 <span class="tier tier-cc">::scroll-button / ::scroll-marker · Tier C</span></p>
+    <h2 id="t-reel">A carousel with no carousel library</h2>
+    <p class="lede">The working base is Tier A scroll snap — swipe or scroll it
+       anywhere. In supporting browsers, the previous/next buttons and the dot
+       markers below are <em>generated by CSS</em>, keyboard-accessible and
+       labelled, via <code>::scroll-button()</code> and <code>::scroll-marker</code>.</p>
+
+    <div class="reel" role="region" aria-label="Feature slides" tabindex="0">
+      <article style="--slide:0"><div>Snap</div></article>
+      <article style="--slide:1"><div>Buttons</div></article>
+      <article style="--slide:2"><div>Markers</div></article>
+      <article style="--slide:3"><div>No JS</div></article>
+      <article style="--slide:4"><div>Fin</div></article>
+    </div>
+    <p class="supnote supnote-reel">CSS-generated carousel controls aren't supported
+       in this browser — showing the fallback: swipe, drag, or scroll the row;
+       snapping still works everywhere.</p>
+
+    <div class="duo">
+      <div></div>
+      <pre class="snippet"><code>.reel { scroll-snap-type: x mandatory; } <span class="c">/* base */</span>
+@supports selector(::scroll-button(*)) {
+  <mark>.reel::scroll-button(inline-end) { content: "›" / "Next"; }</mark>
+  .reel { scroll-marker-group: after; }
+  <mark>.reel &gt; *::scroll-marker { content: "" / "Go to slide"; }</mark>
+  .reel &gt; *::scroll-marker:target-current { background: var(--brand); }
+}</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ §10 TYPE EFFECTS ═══ -->
+<section class="panel" aria-labelledby="t-type">
+  <div class="wrap">
+    <p class="kicker">Act 10 <span class="tier tier-b">text-wrap · text-box · lh · initial-letter — Tier B/C</span></p>
+    <h2 id="t-type">Typography the browser now does for you</h2>
+
+    <div class="type-grid">
+      <div class="type-card wrap-demo">
+        <h3>text-wrap: balance vs default</h3>
+        <div class="balanced">
+          <h4>Ragged headlines are a solved problem now</h4>
+          <small>text-wrap: balance — even line lengths</small>
+        </div>
+        <div class="unbalanced">
+          <h4>Ragged headlines are a solved problem now</h4>
+          <small>default wrapping — lonely last word</small>
+        </div>
+      </div>
+
+      <div class="type-card">
+        <h3>text-box: trim-both (Tier C)</h3>
+        <div class="trim-demo">
+          <span class="pill trimmed">Trimmed</span>
+          <span class="pill">Untrimmed</span>
+        </div>
+        <p style="font-size: 0.85rem; color: var(--text-muted); margin-block-start: 0.75rem">
+          The left pill trims the invisible space above cap height and below
+          the baseline — equal padding finally <em>looks</em> equal.</p>
+        <p class="supnote supnote-textbox">text-box isn't supported in this browser —
+           both pills use ordinary line boxes; the optical offset you may see
+           is exactly what the property fixes.</p>
+      </div>
+
+      <div class="type-card rhythm">
+        <h3>lh-unit vertical rhythm</h3>
+        <p>Margins here are <code>1lh</code> — one line-height.</p>
+        <p>Every paragraph lands back on the stripe grid painted behind this
+           card, because the spacing unit <em>is</em> the leading.</p>
+      </div>
+
+      <div class="type-card dropcap">
+        <h3>initial-letter drop cap (Tier C)</h3>
+        <p>Drop caps once meant absolutely-positioned spans and prayer.
+           <code>initial-letter: 3 3</code> sinks this letter three lines with
+           correct cap-height alignment; unsupported browsers get the honest
+           float fallback you're possibly reading now.</p>
+        <p class="supnote supnote-dropcap">initial-letter isn't supported in this
+           browser — showing the fallback: a floated ::first-letter.</p>
+      </div>
+    </div>
+
+    <div class="duo">
+      <div></div>
+      <pre class="snippet"><code>h1 { <mark>text-wrap: balance;</mark> }  p { <mark>text-wrap: pretty;</mark> }
+.pill { <mark>text-box: trim-both cap alphabetic;</mark> } <span class="c">/* C */</span>
+p { margin-block: <mark>1lh</mark>; }
+p::first-letter { <mark>initial-letter: 3 3;</mark> } <span class="c">/* C */</span></code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ §11 FINALE ═══ -->
+<section class="panel" aria-labelledby="t-finale">
+  <div class="wrap">
+    <p class="kicker">Act 11 <span class="tier tier-b">Everything at once</span></p>
+    <h2 id="t-finale">Curtain call</h2>
+    <p class="lede">One card wearing the whole show: glass from
+       <code>backdrop-filter</code>, a squircle silhouette where supported, an
+       animated conic border driven by the same typed <code>--angle</code> as
+       the hero, and an anchored popover for a bow.</p>
+
+    <div class="finale-bg" style="margin-block-start: var(--space)">
+      <div class="finale-card">
+        <h3>The platform card</h3>
+        <p>Border: <code>conic-gradient</code> on <code>border-box</code> under a
+           translucent <code>padding-box</code> fill. Glass:
+           <code>backdrop-filter: blur(18px)</code> over live gradients.
+           Corners: <code>corner-shape: squircle</code>, guarded.</p>
+        <div class="row">
+          <button popovertarget="tip-finale">Take a bow</button>
+          <span style="font-size:0.8rem; color: var(--text-muted)">← anchored popover</span>
+        </div>
+      </div>
+      <div id="tip-finale" class="tip" popover>🎉 Every trick on this page shipped in a
+         browser. The stylesheet is the app.</div>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer class="colophon">
+  <p>The Modern CSS Show · single file · system fonts · no dependencies ·
+     honors prefers-reduced-motion and prefers-color-scheme.</p>
+</footer>
+
+<script>
+/* ── §6: hue slider — the only imperative code the color system needs ── */
+const hue = document.getElementById('hue');
+hue.addEventListener('input', () => {
+  hue.closest('section').style.setProperty('--chue', hue.value);
+  document.getElementById('hue-val').textContent = hue.value;
+});
+
+/* ── §5: view-transition morph, guarded — falls back to instant swap ── */
+const stage = document.getElementById('vt-stage');
+const label = document.getElementById('vt-label');
+document.querySelectorAll('.vt-thumb').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const apply = () => {
+      stage.style.setProperty('--art', btn.style.getPropertyValue('--art'));
+      label.textContent = btn.dataset.label;
+      document.querySelectorAll('.vt-thumb').forEach(b =>
+        b.setAttribute('aria-pressed', String(b === btn)));
+    };
+    if (!document.startViewTransition) return apply();
+    // Old snapshot: the clicked thumb owns the name. New snapshot: the stage.
+    btn.style.viewTransitionName = 'vt-art';
+    stage.style.viewTransitionName = 'none';
+    const t = document.startViewTransition(() => {
+      btn.style.viewTransitionName = 'none';
+      stage.style.viewTransitionName = 'vt-art';
+      apply();
+    });
+    t.finished.finally(() => {
+      btn.style.viewTransitionName = '';
+      stage.style.viewTransitionName = '';
+    });
+  });
+});
+</script>
+
+</body>
+</html>

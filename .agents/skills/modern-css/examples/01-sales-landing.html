@@ -1,0 +1,1169 @@
+<!doctype html>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════
+  MERIDIAN — analytics that think ahead
+  Showcase example for the "modern-css" Agent Skill.
+  One self-contained file: system fonts, inline SVG, zero external resources.
+
+  Modern CSS features demonstrated (tier per references/feature-support.md):
+
+  Architecture & tokens
+  • @layer cascade layers (reset/tokens/base/layout/components/utilities) — A
+  • Native CSS nesting — A
+  • oklch() one-hue token system, hue-tinted neutrals — A
+  • color-mix(in oklch, …) derived borders/muted text/tints — A
+  • Relative color syntax: oklch(from var(--brand) …) — B
+  • color-scheme + light-dark() dual themes from one token set — B
+  • contrast-color() with light-dark() fallback — B
+  • @property typed/registered custom properties (animated --glow-angle) — B
+  • Logical properties throughout (inline-size, margin-block, inset-inline…) — A
+  • Fluid clamp() type & space scales — A
+  • lh-relative rhythm, dvh/svh viewport units, env(safe-area-inset-*) — A
+
+  Layout
+  • Breakout page scaffold with named grid lines [full-start/content-start] — A
+  • Card grids: repeat(auto-fit, minmax(min(17rem,100%),1fr)) — A
+  • Subgrid-aligned card internals (feature grid + pricing tiers) — A
+  • Container queries + cqi units (self-responsive feature cards) — A
+  • aspect-ratio, overflow: clip, scrollbar-gutter: stable — A
+
+  Components
+  • <dialog> + ::backdrop blur + @starting-style entry/exit animation — A/B
+  • transition-behavior: allow-discrete (display/overlay transitions) — B
+  • closedby="any" light dismiss — C (falls back to Esc/close button)
+  • Invoker commands: commandfor/command="show-modal" + tiny JS fallback — C
+  • <details name> exclusive accordion + animated ::details-content — A/B
+  • interpolate-size: allow-keywords (animate block-size to auto) — C, harmless
+  • Scroll-snap testimonial carousel — A
+  • ::scroll-button() / ::scroll-marker / :target-current — C, @supports-guarded
+  • :has() — pricing "popular" highlight, form-gated submit, theme toggle — A
+  • :user-valid / :user-invalid post-interaction form styling — A
+  • field-sizing: content — B
+  • Pure-CSS theme toggle: checkbox + :has() inverting color-scheme — A/B
+
+  Motion (all gated on prefers-reduced-motion: no-preference)
+  • Scroll-driven reveals: animation-timeline: view() — C, @supports-guarded
+  • Reading-progress bar: animation-timeline: scroll(root) — C, guarded
+  • scroll-state(stuck: top) sticky-header shadow — C, @supports-guarded
+  • Compositor-only micro-interactions (translate/scale/opacity) — A
+  • Conic-gradient hero glow animated via registered @property — B
+
+  Typography & polish
+  • text-wrap: balance (headings) / pretty (prose) — B
+  • Gradient headline via background-clip: text — A
+  • text-box: trim-both cap alphabetic (optical button centering) — C, harmless
+  • corner-shape: squircle — C, @supports-guarded
+  • ::selection, accent-color, scrollbar-color, :focus-visible — A
+  • text-decoration-skip-ink: all underlines, hover media-query gating — A/B
+  • content-visibility: auto + contain-intrinsic-size on below-fold — A
+  ═══════════════════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Meridian — analytics that think ahead. Forecast-first dashboards for teams who plan tomorrow, not autopsy yesterday.">
+<title>Meridian — analytics that think ahead</title>
+<style>
+/* 1 ── Layer order: later layers always win. */
+@layer reset, tokens, base, layout, components, utilities;
+
+/* 2 ── Reset */
+@layer reset {
+  *, *::before, *::after { box-sizing: border-box; }
+  * { margin: 0; }
+  img, picture, video, canvas, svg { display: block; max-inline-size: 100%; }
+  input, button, textarea, select { font: inherit; }
+  p, h1, h2, h3, h4 { overflow-wrap: break-word; }
+}
+
+/* 3 ── Tokens: one hue in, whole palette out. */
+@layer tokens {
+  :root {
+    color-scheme: light dark;
+
+    /* Perceptual color system — a single brand hue, everything derived. */
+    --hue: 258;                                     /* deep periwinkle */
+    --brand: oklch(56% 0.21 var(--hue));
+    --brand-hover: oklch(from var(--brand) calc(l - 0.06) c h);
+    --accent: oklch(74% 0.13 calc(var(--hue) - 78)); /* teal companion */
+
+    --surface:        light-dark(oklch(98.6% 0.006 var(--hue)), oklch(17% 0.018 var(--hue)));
+    --surface-raised: light-dark(oklch(100% 0 0),               oklch(22% 0.022 var(--hue)));
+    --surface-sunken: light-dark(oklch(96.5% 0.010 var(--hue)), oklch(14.5% 0.016 var(--hue)));
+    --text:           light-dark(oklch(23% 0.025 var(--hue)),   oklch(93% 0.012 var(--hue)));
+    --text-muted:     color-mix(in oklch, var(--text) 64%, var(--surface));
+    --border:         color-mix(in oklch, var(--text) 13%, var(--surface));
+    --brand-subtle:   color-mix(in oklch, var(--brand) 9%, var(--surface));
+    --on-brand:       oklch(99% 0.01 var(--hue));
+    --ok:             oklch(56% 0.13 152);
+    --danger:         oklch(55% 0.19 25);
+
+    /* Fluid space & type scales. */
+    --space:    clamp(1rem, 0.6rem + 1.6vw, 1.75rem);
+    --space-lg: clamp(2.5rem, 1.5rem + 4vw, 5.5rem);
+    --step--1: clamp(0.83rem, 0.80rem + 0.15vw, 0.94rem);
+    --step-0:  clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+    --step-1:  clamp(1.25rem, 1.12rem + 0.65vw, 1.55rem);
+    --step-2:  clamp(1.56rem, 1.32rem + 1.2vw, 2.15rem);
+    --step-3:  clamp(1.95rem, 1.55rem + 2vw, 2.9rem);
+    --step-4:  clamp(2.44rem, 1.8rem + 3.2vw, 4.2rem);
+
+    --radius: 14px;
+    --shadow: 0 1px 2px oklch(20% 0.03 var(--hue) / 0.08),
+              0 10px 32px oklch(20% 0.03 var(--hue) / 0.11);
+    --shadow-lg: 0 2px 4px oklch(20% 0.03 var(--hue) / 0.10),
+                 0 24px 64px -12px oklch(20% 0.03 var(--hue) / 0.22);
+    --header-h: 4.25rem;
+
+    accent-color: var(--brand);
+    scrollbar-color: var(--border) transparent;
+    interpolate-size: allow-keywords;   /* Tier C opt-in, harmless elsewhere */
+  }
+
+  /* Tier B contrast-color(), guarded because custom properties keep the
+     last declaration regardless of validity — a plain re-declaration
+     fallback would poison var(--on-brand) in non-supporting engines. */
+  @supports (color: contrast-color(red)) {
+    :root { --on-brand: contrast-color(var(--brand)); }
+  }
+
+  /* Registered so the hero glow can animate the token itself (Tier B). */
+  @property --glow-angle { syntax: "<angle>"; inherits: false; initial-value: 40deg; }
+
+  /* Pure-CSS theme toggle: the checkbox inverts the resolved scheme.
+     Unchecked = follow the system; light-dark() keeps working either way. */
+  @media (prefers-color-scheme: light) {
+    html:has(#scheme-flip:checked) { color-scheme: dark; }
+  }
+  @media (prefers-color-scheme: dark) {
+    html:has(#scheme-flip:checked) { color-scheme: light; }
+  }
+}
+
+/* 4 ── Base */
+@layer base {
+  html { scrollbar-gutter: stable; }
+  @media (prefers-reduced-motion: no-preference) {
+    html { scroll-behavior: smooth; }
+  }
+  body {
+    background: var(--surface);
+    color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: var(--step-0);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    padding-inline: env(safe-area-inset-left) env(safe-area-inset-right);
+  }
+  h1, h2, h3 { text-wrap: balance; line-height: 1.12; letter-spacing: -0.015em; }
+  p, li, figcaption, dd { text-wrap: pretty; }
+  p { max-inline-size: 62ch; }
+  a { color: var(--brand); text-decoration-thickness: 0.08em;
+      text-underline-offset: 0.16em; text-decoration-skip-ink: all; }
+  :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 4px; }
+  ::selection { background: var(--brand); color: var(--on-brand); }
+  button { cursor: pointer; touch-action: manipulation; }
+  section { scroll-margin-block-start: calc(var(--header-h) + 1rem); }
+}
+
+/* 5 ── Layout */
+@layer layout {
+  /* Breakout scaffold: prose column with edge-to-edge sections. */
+  .page {
+    display: grid;
+    grid-template-columns:
+      [full-start] minmax(var(--space), 1fr)
+      [content-start] min(100% - 2 * var(--space), 72rem) [content-end]
+      minmax(var(--space), 1fr) [full-end];
+  }
+  .page > * { grid-column: content; }
+  .page > .full-bleed { grid-column: full; }
+
+  .section { padding-block: var(--space-lg); }
+  .section-head {
+    max-inline-size: 46rem;
+    margin-block-end: calc(var(--space) * 1.5);
+    & p { color: var(--text-muted); margin-block-start: 0.5rem; }
+  }
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 0.45rem;
+    font-size: var(--step--1); font-weight: 600; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--brand);
+    &::before { content: ""; inline-size: 1.4rem; block-size: 2px;
+                background: var(--brand); border-radius: 1px; }
+  }
+  h2 { font-size: var(--step-3); }
+
+  /* Below-the-fold rendering: skip work until near viewport. */
+  .below-fold { content-visibility: auto; contain-intrinsic-size: auto 640px; }
+}
+
+/* 6 ── Components */
+@layer components {
+
+  /* ── Buttons ─────────────────────────────────────────────── */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+    min-block-size: 44px; padding: 0.7rem 1.35rem;
+    border: 1px solid transparent; border-radius: calc(var(--radius) - 4px);
+    font-weight: 600; text-decoration: none; white-space: nowrap;
+    transition: background-color 0.15s, border-color 0.15s, color 0.15s,
+                translate 0.15s ease-out, box-shadow 0.15s;
+    text-box: trim-both cap alphabetic;   /* Tier C optical centering, harmless */
+
+    &.btn-primary {
+      background: var(--brand); color: var(--on-brand);
+      box-shadow: 0 1px 2px oklch(30% 0.1 var(--hue) / 0.25),
+                  0 6px 18px -4px oklch(from var(--brand) l c h / 0.45);
+      &:active { translate: 0 1px; }
+    }
+    &.btn-ghost {
+      background: var(--surface-raised); color: var(--text);
+      border-color: var(--border);
+    }
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .btn-primary:hover { background: var(--brand-hover); translate: 0 -1px; }
+    .btn-ghost:hover { border-color: color-mix(in oklch, var(--brand) 45%, var(--border)); }
+  }
+
+  /* ── Reading progress bar — Tier C, invisible without support ── */
+  @supports (animation-timeline: scroll()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .progress {
+        position: fixed; inset-block-start: 0; inset-inline: 0; z-index: 60;
+        block-size: 3px;
+        background: linear-gradient(90deg in oklch, var(--brand), var(--accent));
+        transform-origin: 0 50%;
+        animation: grow-x linear both;
+        animation-timeline: scroll(root);
+      }
+      @keyframes grow-x { from { scale: 0 1; } to { scale: 1 1; } }
+    }
+  }
+
+  /* ── Sticky header + stuck-state enhancement ─────────────── */
+  .header-wrap {
+    position: sticky; inset-block-start: 0; z-index: 50;
+    container-type: scroll-state;      /* ignored where unsupported */
+  }
+  .header {
+    display: flex; align-items: center; gap: clamp(0.75rem, 2vw, 1.5rem);
+    block-size: var(--header-h);
+    padding-inline: max(var(--space), env(safe-area-inset-left));
+    background: var(--surface);
+    border-block-end: 1px solid var(--border);
+    transition: box-shadow 0.25s, background-color 0.25s;
+  }
+  @supports (container-type: scroll-state) {
+    @container scroll-state(stuck: top) {
+      .header {
+        background: color-mix(in oklch, var(--surface) 82%, transparent);
+        backdrop-filter: blur(12px);
+        box-shadow: 0 1px 0 var(--border), 0 8px 28px -12px oklch(20% 0.04 var(--hue) / 0.25);
+        border-block-end-color: transparent;
+      }
+    }
+  }
+  .brand-mark {
+    display: inline-flex; align-items: center; gap: 0.55rem;
+    font-weight: 750; font-size: 1.15rem; letter-spacing: -0.01em;
+    color: var(--text); text-decoration: none;
+    & svg { inline-size: 1.65rem; }
+  }
+  .site-nav {
+    display: none;
+    margin-inline-start: auto;
+    & a {
+      color: var(--text-muted); text-decoration: none; font-weight: 550;
+      font-size: var(--step--1); padding: 0.5rem 0.75rem; border-radius: 8px;
+      transition: color 0.15s, background-color 0.15s;
+    }
+    @media (hover: hover) {
+      & a:hover { color: var(--text); background: var(--surface-sunken); }
+    }
+  }
+  @media (min-width: 46rem) {
+    .site-nav { display: flex; gap: 0.25rem; }
+  }
+  /* Mobile: nav hidden, so the toggle+CTA cluster pushes itself right. */
+  .header .theme-toggle { margin-inline-start: auto; }
+  @media (min-width: 46rem) {
+    .header .theme-toggle { margin-inline-start: 0; }
+  }
+
+  /* ── Theme toggle: checkbox + :has(), no JS ──────────────── */
+  .theme-toggle {
+    position: relative; display: inline-flex; align-items: center;
+    inline-size: 3.4rem; block-size: 1.9rem; flex-shrink: 0;
+    border: 1px solid var(--border); border-radius: 999px;
+    background: var(--surface-sunken); cursor: pointer;
+
+    & input { position: absolute; inset: 0; opacity: 0; cursor: inherit; margin: 0; }
+    & .knob {
+      position: absolute; inset-block-start: 50%; inset-inline-start: 3px;
+      translate: 0 -50%;
+      inline-size: 1.45rem; aspect-ratio: 1; border-radius: 50%;
+      display: grid; place-content: center;
+      background: var(--surface-raised); box-shadow: var(--shadow);
+      transition: inset-inline-start 0.2s ease-out;
+      & svg { inline-size: 0.95rem; color: var(--brand); }
+    }
+    & .icon-moon { display: none; }
+    &:has(input:checked) .knob { inset-inline-start: calc(100% - 1.45rem - 3px); }
+    &:has(input:checked) { .icon-sun { display: none; } .icon-moon { display: block; } }
+    &:has(input:focus-visible) { outline: 2px solid var(--brand); outline-offset: 2px; }
+  }
+
+  /* ── Hero ────────────────────────────────────────────────── */
+  .hero {
+    position: relative; overflow: clip;
+    display: grid;
+    grid-template-columns: subgrid;       /* inherit the page's breakout tracks */
+    align-content: center;
+    min-block-size: calc(100dvh - var(--header-h));
+    padding-block: var(--space-lg);
+    background:
+      radial-gradient(58rem 34rem at 78% -10%,
+        color-mix(in oklch, var(--brand) 13%, transparent), transparent 70%),
+      radial-gradient(44rem 30rem at 8% 110%,
+        color-mix(in oklch, var(--accent) 11%, transparent), transparent 70%);
+  }
+  .hero > .hero-inner {
+    grid-column: content;
+    display: grid; gap: clamp(2rem, 5vw, 4rem);
+    align-items: center;
+    grid-template-columns: 1fr;
+    @media (min-width: 58rem) { grid-template-columns: 1.15fr 1fr; }
+  }
+  .hero-copy {
+    & .pill {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.35rem 0.9rem; border-radius: 999px;
+      border: 1px solid color-mix(in oklch, var(--brand) 30%, var(--border));
+      background: var(--brand-subtle);
+      font-size: var(--step--1); font-weight: 600; color: var(--brand);
+      margin-block-end: 1.25rem;
+      & .dot { inline-size: 0.5rem; aspect-ratio: 1; border-radius: 50%;
+               background: var(--ok); }
+    }
+    & h1 {
+      font-size: var(--step-4); font-weight: 800; letter-spacing: -0.03em;
+      /* Gradient headline — in oklch so midpoints never go muddy. */
+      background: linear-gradient(94deg in oklch,
+        var(--text) 15%, var(--brand) 55%, var(--accent) 95%);
+      -webkit-background-clip: text; background-clip: text;
+      -webkit-text-fill-color: transparent; color: transparent;
+      padding-block-end: 0.08em;   /* keep descenders inside the clip box */
+    }
+    & .lede {
+      margin-block: 1.25rem 1.75rem;
+      font-size: var(--step-1); color: var(--text-muted); max-inline-size: 34ch;
+    }
+    & .cta-row { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; }
+    & .fine-print {
+      margin-block-start: 1rem; font-size: var(--step--1); color: var(--text-muted);
+    }
+  }
+
+  /* Hero visual: pure CSS/SVG dashboard card with a slow conic glow. */
+  .hero-visual {
+    position: relative;
+    & .glow {
+      position: absolute; inset: -8%;
+      border-radius: 24px; z-index: 0;
+      background: conic-gradient(from var(--glow-angle) in oklch,
+        color-mix(in oklch, var(--brand) 30%, transparent),
+        color-mix(in oklch, var(--accent) 25%, transparent),
+        color-mix(in oklch, var(--brand) 30%, transparent));
+      filter: blur(44px); opacity: 0.55;
+    }
+    & .panel {
+      position: relative; z-index: 1;
+      background: color-mix(in oklch, var(--surface-raised) 88%, transparent);
+      backdrop-filter: blur(8px);
+      border: 1px solid color-mix(in oklch, var(--text) 10%, transparent);
+      border-radius: calc(var(--radius) * 1.3);
+      box-shadow: var(--shadow-lg);
+      padding: clamp(1rem, 3vw, 1.75rem);
+      display: grid; gap: 1rem;
+    }
+    & .panel-head {
+      display: flex; align-items: baseline; justify-content: space-between; gap: 1rem;
+      & h3 { font-size: var(--step--1); font-weight: 600; color: var(--text-muted);
+             text-transform: uppercase; letter-spacing: 0.07em; }
+      & .delta { font-size: var(--step--1); font-weight: 700; color: var(--ok); }
+    }
+    & .big-number { font-size: var(--step-3); font-weight: 800; letter-spacing: -0.02em; }
+    & .forecast-note {
+      display: flex; gap: 0.5rem; align-items: center;
+      font-size: var(--step--1); color: var(--text-muted);
+      padding: 0.6rem 0.8rem; border-radius: 10px;
+      background: var(--brand-subtle);
+      border: 1px solid color-mix(in oklch, var(--brand) 22%, transparent);
+      & svg { inline-size: 1rem; color: var(--brand); flex-shrink: 0; }
+    }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .hero-visual .glow { animation: glow-turn 14s linear infinite; }
+    @keyframes glow-turn { to { --glow-angle: 400deg; } }
+  }
+
+  /* ── Social proof ────────────────────────────────────────── */
+  .logos {
+    padding-block: calc(var(--space) * 1.4);
+    border-block: 1px solid var(--border);
+    & p {
+      text-align: center; font-size: var(--step--1); color: var(--text-muted);
+      margin-block-end: 1.1rem; max-inline-size: none;
+    }
+    & ul {
+      list-style: none; padding: 0;
+      display: flex; flex-wrap: wrap; justify-content: center;
+      gap: clamp(1.25rem, 4vw, 3.25rem);
+    }
+    & li {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      font-weight: 700; font-size: 1.05rem; letter-spacing: -0.01em;
+      color: var(--text-muted); opacity: 0.85;
+      & svg { inline-size: 1.25rem; }
+    }
+  }
+
+  /* ── Feature grid: container-query cards + subgrid ───────── */
+  .features { container: features / inline-size; }
+  .feature-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(17rem, 100%), 1fr));
+    gap: var(--space);
+    list-style: none; padding: 0;
+  }
+  .feature {
+    display: grid;
+    grid-row: span 3;                    /* icon / title / body align across cards */
+    grid-template-rows: subgrid;
+    row-gap: 0.65rem;
+    padding: clamp(1.25rem, 3cqi, 2rem);
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    transition: translate 0.2s ease-out, box-shadow 0.2s, border-color 0.2s;
+
+    & .icon {
+      inline-size: 2.6rem; aspect-ratio: 1; border-radius: 10px;
+      display: grid; place-content: center;
+      background: var(--brand-subtle); color: var(--brand);
+      border: 1px solid color-mix(in oklch, var(--brand) 22%, transparent);
+      & svg { inline-size: 1.3rem; }
+    }
+    & h3 { font-size: clamp(1.1rem, 1rem + 0.9cqi, 1.35rem); align-self: end; }
+    & p { color: var(--text-muted); font-size: var(--step--1); max-inline-size: none; }
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .feature:hover {
+      translate: 0 -3px; box-shadow: var(--shadow-lg);
+      border-color: color-mix(in oklch, var(--brand) 30%, var(--border));
+    }
+  }
+  /* The card set responds to ITS container, not the viewport. */
+  @container features (min-width: 64rem) {
+    .feature-grid { gap: calc(var(--space) * 1.25); }
+  }
+
+  /* ── Pricing: 3 tiers, subgrid-aligned, :has() highlight ─── */
+  .tiers {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(17rem, 100%), 1fr));
+    gap: var(--space);
+    align-items: start;
+    list-style: none; padding: 0;
+  }
+  .tier {
+    display: grid;
+    grid-row: span 5;   /* name / price / blurb / features / action */
+    grid-template-rows: subgrid;
+    row-gap: 1rem;
+    padding: clamp(1.4rem, 3vw, 2rem);
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+
+    & .tier-name {
+      display: flex; align-items: center; gap: 0.6rem;
+      font-size: var(--step-1); font-weight: 700;
+    }
+    & .badge {
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 0.25rem 0.6rem; border-radius: 999px;
+      background: var(--brand); color: var(--on-brand);
+    }
+    & .price {
+      font-size: var(--step-3); font-weight: 800; letter-spacing: -0.02em;
+      & span { font-size: var(--step--1); font-weight: 500; color: var(--text-muted); }
+    }
+    & .blurb { color: var(--text-muted); font-size: var(--step--1); }
+    & ul {
+      list-style: none; padding: 0; display: grid; gap: 0.55rem;
+      font-size: var(--step--1);
+      & li { display: flex; gap: 0.55rem; align-items: start; }
+      & svg { inline-size: 1.05rem; flex-shrink: 0; color: var(--ok); margin-block-start: 0.15em; }
+    }
+    & .btn { inline-size: 100%; }
+  }
+  /* Style the parent when it contains the badge — no "popular" class needed. */
+  .tier:has(.badge) {
+    border-color: color-mix(in oklch, var(--brand) 55%, var(--border));
+    background: linear-gradient(180deg in oklch,
+      color-mix(in oklch, var(--brand) 7%, var(--surface-raised)),
+      var(--surface-raised) 55%);
+    box-shadow: var(--shadow-lg),
+      0 0 0 4px color-mix(in oklch, var(--brand) 14%, transparent);
+  }
+
+  /* ── Testimonials: scroll-snap base + CSS carousel enhancement ── */
+  .carousel-shell { position: relative; }
+  .carousel {
+    display: grid; grid-auto-flow: column;
+    grid-auto-columns: min(26rem, 86%);
+    gap: var(--space);
+    overflow-x: auto; overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scroll-padding-inline: var(--space);
+    padding-block: 0.5rem 1rem; padding-inline: 0;
+    scrollbar-width: none;
+    list-style: none;
+    & > li { scroll-snap-align: center; }
+  }
+  .quote-card {
+    block-size: 100%;
+    display: grid; align-content: space-between; gap: 1.25rem;
+    padding: clamp(1.25rem, 3vw, 1.75rem);
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    & blockquote { font-size: var(--step-1); line-height: 1.4; text-wrap: pretty;
+      &::before { content: "“"; color: var(--brand); font-weight: 800; }
+      &::after  { content: "”"; color: var(--brand); font-weight: 800; }
+    }
+    & figcaption {
+      display: flex; align-items: center; gap: 0.75rem;
+      & .avatar {
+        inline-size: 2.6rem; aspect-ratio: 1; border-radius: 50%;
+        display: grid; place-content: center;
+        font-weight: 700; font-size: 0.95rem; color: var(--on-brand);
+        background: linear-gradient(135deg in oklch, var(--brand), var(--accent));
+      }
+      & .who b { display: block; font-size: var(--step--1); }
+      & .who span { font-size: 0.8rem; color: var(--text-muted); }
+    }
+  }
+  /* Tier C: browser-generated, focusable buttons + marker dots. */
+  @supports selector(::scroll-button(*)) {
+    .carousel { anchor-name: --testimonials; scroll-marker-group: after; }
+    .carousel::scroll-button(*) {
+      position: absolute; position-anchor: --testimonials;
+      inline-size: 2.75rem; aspect-ratio: 1; border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--surface-raised); color: var(--text);
+      font-size: 1.3rem; font-weight: 600;
+      box-shadow: var(--shadow); cursor: pointer;
+      transition: opacity 0.2s, background-color 0.15s;
+      &:disabled { opacity: 0.3; cursor: default; }
+      &:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+    }
+    .carousel::scroll-button(inline-start) {
+      content: "‹" / "Previous testimonial";
+      position-area: inline-start center; margin-inline-end: 0.75rem;
+    }
+    .carousel::scroll-button(inline-end) {
+      content: "›" / "Next testimonial";
+      position-area: inline-end center; margin-inline-start: 0.75rem;
+    }
+    .carousel::scroll-marker-group {
+      display: flex; justify-content: center; gap: 0.55rem; padding-block: 0.75rem;
+    }
+    .carousel > li::scroll-marker {
+      content: "" / "Go to testimonial";
+      inline-size: 0.55rem; aspect-ratio: 1; border-radius: 50%;
+      background: var(--border);
+      transition: background-color 0.2s, scale 0.2s;
+    }
+    .carousel > li::scroll-marker:target-current {
+      background: var(--brand); scale: 1.25;
+    }
+  }
+
+  /* ── FAQ: exclusive accordion, animated, zero JS ─────────── */
+  .faq-list {
+    display: grid; gap: 0.75rem; max-inline-size: 46rem;
+  }
+  .faq-list details {
+    background: var(--surface-raised);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    transition: border-color 0.2s;
+
+    & summary {
+      display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+      padding: 1.1rem 1.3rem;
+      font-weight: 650; cursor: pointer; list-style: none;
+      min-block-size: 44px;
+      &::-webkit-details-marker { display: none; }
+      &::after {
+        content: ""; flex-shrink: 0;
+        inline-size: 0.6rem; aspect-ratio: 1;
+        border-inline-end: 2px solid var(--brand);
+        border-block-end: 2px solid var(--brand);
+        rotate: 45deg; translate: 0 -2px;
+        transition: rotate 0.25s ease-out, translate 0.25s ease-out;
+      }
+    }
+    &[open] summary::after { rotate: 225deg; translate: 0 2px; }
+    &[open] { border-color: color-mix(in oklch, var(--brand) 35%, var(--border)); }
+
+    &::details-content {
+      opacity: 0; block-size: 0; overflow-y: clip;
+      transition: content-visibility 0.3s allow-discrete,
+                  opacity 0.3s ease-out, block-size 0.3s ease-out;
+    }
+    &[open]::details-content { opacity: 1; block-size: auto; }
+    & .answer { padding: 0 1.3rem 1.2rem; color: var(--text-muted);
+                font-size: var(--step--1); }
+  }
+
+  /* ── Final CTA + signup form ─────────────────────────────── */
+  .cta-final {
+    position: relative; overflow: clip;
+    border-radius: calc(var(--radius) * 1.4);
+    padding: var(--space-lg) clamp(1.25rem, 4vw, 3rem);
+    text-align: center;
+    background:
+      radial-gradient(40rem 22rem at 50% -30%,
+        color-mix(in oklch, var(--brand) 20%, transparent), transparent 70%),
+      var(--surface-sunken);
+    border: 1px solid var(--border);
+    display: grid; justify-items: center; gap: 1rem;
+    & h2 { font-size: var(--step-3); max-inline-size: 22ch; }
+    & > p { color: var(--text-muted); max-inline-size: 44ch; }
+  }
+  .signup {
+    display: grid; gap: 0.75rem; justify-items: center;
+    inline-size: min(100%, 30rem); margin-block-start: 0.75rem;
+
+    & .field {
+      display: flex; flex-wrap: wrap; gap: 0.6rem; inline-size: 100%;
+      & input[type="email"] {
+        flex: 1 1 14rem; min-block-size: 44px;
+        padding: 0.65rem 1rem;
+        border: 1px solid var(--border);
+        border-radius: calc(var(--radius) - 4px);
+        background: var(--surface-raised);
+        transition: border-color 0.15s;
+        &::placeholder { color: var(--text-muted); }
+        /* Post-interaction only — never bare :valid/:invalid. */
+        &:user-invalid { border-color: var(--danger); }
+        &:user-valid   { border-color: var(--ok); }
+      }
+    }
+    & .error {
+      display: none; color: var(--danger); font-size: var(--step--1); font-weight: 550;
+    }
+    &:has(input:user-invalid) .error { display: block; }
+
+    & .consent {
+      display: flex; gap: 0.55rem; align-items: center;
+      font-size: var(--step--1); color: var(--text-muted); cursor: pointer;
+      & input { inline-size: 1.05rem; aspect-ratio: 1; cursor: inherit; }
+    }
+    /* Submit is gated until consent is ticked — pure :has(). */
+    &:has(.consent input:not(:checked)) [type="submit"] {
+      opacity: 0.45; pointer-events: none;
+    }
+
+    & .success { display: none; color: var(--ok); font-weight: 650; }
+    &[data-submitted] {
+      & .field, & .consent, & .error { display: none; }
+      & .success { display: block; }
+    }
+  }
+
+  /* ── Footer ──────────────────────────────────────────────── */
+  .site-footer {
+    margin-block-start: var(--space-lg);
+    border-block-start: 1px solid var(--border);
+    padding-block: calc(var(--space) * 1.5)
+                   calc(var(--space) + env(safe-area-inset-bottom));
+    & .footer-inner {
+      inline-size: min(100% - 2 * var(--space), 72rem);
+      margin-inline: auto;
+      display: flex; flex-wrap: wrap; gap: 1.5rem;
+      align-items: center; justify-content: space-between;
+      color: var(--text-muted); font-size: var(--step--1);
+    }
+    & nav { display: flex; flex-wrap: wrap; gap: 1.25rem; }
+    & a { color: var(--text-muted); text-decoration: none;
+          transition: color 0.15s; }
+    @media (hover: hover) { & a:hover { color: var(--text); } }
+  }
+
+  /* ── Get-started dialog: top layer, animated both ways ───── */
+  .modal {
+    inline-size: min(92vw, 26rem);
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) * 1.2);
+    background: var(--surface-raised); color: var(--text);
+    box-shadow: var(--shadow-lg);
+    padding: clamp(1.5rem, 4vw, 2.25rem);
+    margin: auto;   /* center in the top layer */
+
+    opacity: 1; scale: 1; translate: 0 0;
+    transition: opacity 0.25s ease-out, scale 0.25s ease-out, translate 0.25s ease-out,
+                display 0.25s allow-discrete, overlay 0.25s allow-discrete;
+
+    &::backdrop {
+      background: oklch(14% 0.03 258 / 0.45);
+      backdrop-filter: blur(8px);
+      transition: opacity 0.25s ease-out,
+                  display 0.25s allow-discrete, overlay 0.25s allow-discrete;
+      opacity: 1;
+    }
+    /* Exit state (transition runs thanks to allow-discrete). */
+    &:not([open]) { opacity: 0; scale: 0.94; translate: 0 12px; }
+    &:not([open])::backdrop { opacity: 0; }
+
+    & h2 { font-size: var(--step-2); margin-block-end: 0.5rem; }
+    & p { color: var(--text-muted); font-size: var(--step--1); margin-block-end: 1.25rem; }
+    & form { display: grid; gap: 0.75rem; }
+    & label { font-size: var(--step--1); font-weight: 600; }
+    & input, & textarea {
+      min-block-size: 44px; padding: 0.6rem 0.9rem;
+      border: 1px solid var(--border); border-radius: calc(var(--radius) - 4px);
+      background: var(--surface);
+      &:user-invalid { border-color: var(--danger); }
+      &:user-valid { border-color: var(--ok); }
+    }
+    /* Auto-growing textarea: no autosize script (Tier B). */
+    & textarea {
+      field-sizing: content;
+      min-block-size: 2lh; max-block-size: 6lh;
+      resize: none;
+    }
+    & .modal-actions { display: flex; gap: 0.6rem; margin-block-start: 0.5rem;
+      & .btn { flex: 1; } }
+    & .close-x {
+      position: absolute; inset-block-start: 0.85rem; inset-inline-end: 0.85rem;
+      inline-size: 2.25rem; aspect-ratio: 1; border-radius: 50%;
+      border: none; background: transparent; color: var(--text-muted);
+      display: grid; place-content: center; font-size: 1.15rem;
+      transition: background-color 0.15s, color 0.15s;
+    }
+    @media (hover: hover) {
+      & .close-x:hover { background: var(--surface-sunken); color: var(--text); }
+    }
+  }
+  /* Entry state — first frame after [open] is set. */
+  @starting-style {
+    .modal[open] { opacity: 0; scale: 0.94; translate: 0 12px; }
+    .modal[open]::backdrop { opacity: 0; }
+  }
+
+  /* ── Scroll-driven reveals — Tier C, content visible without ── */
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      .reveal {
+        animation: fade-up both;
+        animation-timeline: view();
+        animation-range: entry 0% cover 32%;
+      }
+      @keyframes fade-up {
+        from { opacity: 0; translate: 0 28px; }
+      }
+    }
+  }
+
+  /* Squircle corners where the engine can draw them. */
+  @supports (corner-shape: squircle) {
+    .feature, .tier, .quote-card, .modal, .cta-final {
+      corner-shape: squircle;
+      border-radius: calc(var(--radius) * 1.6);
+    }
+  }
+}
+
+/* 7 ── Utilities */
+@layer utilities {
+  .visually-hidden {
+    position: absolute; inline-size: 1px; block-size: 1px;
+    padding: 0; margin: -1px; overflow: hidden;
+    clip-path: inset(50%); white-space: nowrap; border: 0;
+  }
+}
+
+/* Reduced-motion kill switch — the one sanctioned !important. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="progress" aria-hidden="true"></div>
+
+<div class="header-wrap">
+  <header class="header">
+    <a class="brand-mark" href="#top" aria-label="Meridian home">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <circle cx="16" cy="16" r="13" fill="none" stroke="oklch(56% 0.21 258)" stroke-width="3"/>
+        <path d="M16 3 A13 13 0 0 1 29 16" fill="none" stroke="oklch(74% 0.13 180)" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="16" cy="16" r="4" fill="oklch(56% 0.21 258)"/>
+      </svg>
+      Meridian
+    </a>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="#features">Features</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#stories">Stories</a>
+      <a href="#faq">FAQ</a>
+    </nav>
+    <label class="theme-toggle" title="Toggle color theme">
+      <input type="checkbox" id="scheme-flip">
+      <span class="visually-hidden">Toggle between light and dark theme</span>
+      <span class="knob">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>
+        </svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>
+        </svg>
+      </span>
+    </label>
+    <button class="btn btn-primary" commandfor="get-started" command="show-modal">Get started</button>
+  </header>
+</div>
+
+<main class="page" id="top">
+
+  <!-- ── Hero ─────────────────────────────────────────────── -->
+  <section class="hero full-bleed" aria-labelledby="hero-title">
+    <div class="hero-inner">
+      <div class="hero-copy">
+        <span class="pill"><span class="dot" aria-hidden="true"></span> Forecasting engine v4 is live</span>
+        <h1 id="hero-title">Analytics that think ahead</h1>
+        <p class="lede">Meridian watches your metrics the way an analyst would — then tells you what happens next, and why.</p>
+        <div class="cta-row">
+          <button class="btn btn-primary" commandfor="get-started" command="show-modal">Start free trial</button>
+          <a class="btn btn-ghost" href="#features">See how it works</a>
+        </div>
+        <p class="fine-print">14-day trial · No credit card · SOC 2 Type II</p>
+      </div>
+
+      <div class="hero-visual" aria-hidden="true">
+        <div class="glow"></div>
+        <div class="panel">
+          <div class="panel-head">
+            <h3>Weekly active revenue</h3>
+            <span class="delta">▲ 12.4% forecast</span>
+          </div>
+          <p class="big-number">$248,310</p>
+          <svg viewBox="0 0 320 110" role="img" aria-label="Revenue trend chart with forecast band">
+            <defs>
+              <linearGradient id="area" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="oklch(56% 0.21 258)" stop-opacity="0.28"/>
+                <stop offset="1" stop-color="oklch(56% 0.21 258)" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <path d="M0 88 L36 80 L72 84 L108 66 L144 70 L180 52 L216 56 L232 46 L232 110 L0 110 Z" fill="url(#area)"/>
+            <path d="M0 88 L36 80 L72 84 L108 66 L144 70 L180 52 L216 56 L232 46"
+                  fill="none" stroke="oklch(56% 0.21 258)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M232 46 L262 38 L292 26 L318 20"
+                  fill="none" stroke="oklch(74% 0.13 180)" stroke-width="3" stroke-linecap="round" stroke-dasharray="1 8"/>
+            <path d="M232 46 L262 30 L292 14 L318 6 L318 34 L292 40 L262 48 L232 46 Z"
+                  fill="oklch(74% 0.13 180)" opacity="0.14"/>
+            <circle cx="232" cy="46" r="5" fill="oklch(74% 0.13 180)"/>
+          </svg>
+          <p class="forecast-note">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+              <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><circle cx="12" cy="12" r="4"/>
+            </svg>
+            Expansion revenue in EMEA is driving the lift — 87% confidence.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Social proof ─────────────────────────────────────── -->
+  <section class="logos full-bleed" aria-label="Companies using Meridian">
+    <p>Trusted by planning-obsessed teams at</p>
+    <ul>
+      <li><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l9 5v10l-9 5-9-5V7z" opacity="0.5"/><path d="M12 7l4.5 2.5v5L12 17l-4.5-2.5v-5z"/></svg>Hexbyte</li>
+      <li><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="10" opacity="0.4"/><circle cx="12" cy="12" r="5"/></svg>Solstice</li>
+      <li><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 20L12 4l9 16z" opacity="0.5"/><path d="M8 20l4-8 4 8z"/></svg>Fjordline</li>
+      <li><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2" opacity="0.4"/><rect x="3" y="13" width="8" height="8" rx="2" opacity="0.4"/></svg>Copperleaf</li>
+      <li><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M4 18c2-8 6-12 8-12s6 4 8 12" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/><circle cx="12" cy="18" r="2.5"/></svg>Vantage&nbsp;Systems</li>
+    </ul>
+  </section>
+
+  <!-- ── Features ─────────────────────────────────────────── -->
+  <section class="features section below-fold reveal" id="features" aria-labelledby="features-title">
+    <div class="section-head">
+      <span class="eyebrow">Capabilities</span>
+      <h2 id="features-title">Stop doing autopsies on last quarter</h2>
+      <p>Dashboards tell you what happened. Meridian builds a living model of your business and tells you what happens next.</p>
+    </div>
+    <ul class="feature-grid">
+      <li class="feature">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17l5-6 4 3 6-8 3 3"/><path d="M3 21h18"/></svg></span>
+        <h3>Forecast-first dashboards</h3>
+        <p>Every chart projects forward by default. Confidence bands, scenario toggles, and the assumptions behind them — one click away.</p>
+      </li>
+      <li class="feature">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 5V2M12 22v-3M5 12H2M22 12h-3M6.3 6.3L4.2 4.2M19.8 19.8l-2.1-2.1M6.3 17.7l-2.1 2.1M19.8 4.2l-2.1 2.1"/></svg></span>
+        <h3>Anomaly triage</h3>
+        <p>When a metric drifts, Meridian isolates the segment, quantifies the impact, and drafts the incident summary before you open your laptop.</p>
+      </li>
+      <li class="feature">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg></span>
+        <h3>Narrative reports</h3>
+        <p>Monday-morning briefs written from your data: what moved, what it means, what to do. Sent to Slack, email, or your board deck.</p>
+      </li>
+      <li class="feature">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18M3 12h18"/><circle cx="12" cy="12" r="9"/></svg></span>
+        <h3>Scenario planning</h3>
+        <p>Drag a lever — pricing, headcount, churn — and watch every downstream metric re-forecast in real time. No spreadsheet gymnastics.</p>
+      </li>
+      <li class="feature">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M9 4v16"/></svg></span>
+        <h3>Warehouse-native</h3>
+        <p>Runs directly on Snowflake, BigQuery, or Postgres. Your data never leaves your warehouse; Meridian brings the model to it.</p>
+      </li>
+      <li class="feature">
+        <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>
+        <h3>Governance built in</h3>
+        <p>Row-level permissions, metric definitions as code, and a full audit trail. The numbers in the board deck match the ones in the warehouse.</p>
+      </li>
+    </ul>
+  </section>
+
+  <!-- ── Pricing ──────────────────────────────────────────── -->
+  <section class="section below-fold reveal" id="pricing" aria-labelledby="pricing-title">
+    <div class="section-head">
+      <span class="eyebrow">Pricing</span>
+      <h2 id="pricing-title">Pay for foresight, not seats</h2>
+      <p>Every plan includes unlimited viewers. You only pay for the people who build models.</p>
+    </div>
+    <ul class="tiers">
+      <li class="tier">
+        <p class="tier-name">Starter</p>
+        <p class="price">$0 <span>/ forever</span></p>
+        <p class="blurb">For small teams proving the habit of looking forward.</p>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>3 forecast models</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>1 data source</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>Weekly narrative brief</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>Community support</li>
+        </ul>
+        <button class="btn btn-ghost" commandfor="get-started" command="show-modal">Start free</button>
+      </li>
+      <li class="tier">
+        <p class="tier-name">Growth <span class="badge">Most popular</span></p>
+        <p class="price">$59 <span>/ builder / month</span></p>
+        <p class="blurb">For teams whose Monday meeting runs on Meridian.</p>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>Unlimited models &amp; scenarios</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>All warehouse connectors</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>Anomaly triage &amp; alerting</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>Metric definitions as code</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>Priority support</li>
+        </ul>
+        <button class="btn btn-primary" commandfor="get-started" command="show-modal">Start 14-day trial</button>
+      </li>
+      <li class="tier">
+        <p class="tier-name">Enterprise</p>
+        <p class="price">Custom <span>&nbsp;</span></p>
+        <p class="blurb">For organizations where the forecast is the plan.</p>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>Everything in Growth</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>SSO / SCIM &amp; audit trail</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>Private model training</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>Dedicated forecast engineer</li>
+        </ul>
+        <button class="btn btn-ghost" commandfor="get-started" command="show-modal">Talk to sales</button>
+      </li>
+    </ul>
+  </section>
+
+  <!-- ── Testimonials ─────────────────────────────────────── -->
+  <section class="section below-fold reveal" id="stories" aria-labelledby="stories-title">
+    <div class="section-head">
+      <span class="eyebrow">Stories</span>
+      <h2 id="stories-title">Teams that saw it coming</h2>
+    </div>
+    <div class="carousel-shell">
+      <ul class="carousel" aria-label="Customer testimonials" tabindex="0">
+        <li>
+          <figure class="quote-card">
+            <blockquote>Meridian flagged our churn spike three weeks before it hit the P&amp;L. We fixed the onboarding flow before finance even asked.</blockquote>
+            <figcaption>
+              <span class="avatar" aria-hidden="true">IK</span>
+              <span class="who"><b>Ingrid Kessler</b><span>VP Data, Fjordline</span></span>
+            </figcaption>
+          </figure>
+        </li>
+        <li>
+          <figure class="quote-card">
+            <blockquote>Our Monday metrics meeting went from ninety minutes of arguing about definitions to fifteen minutes of deciding what to do.</blockquote>
+            <figcaption>
+              <span class="avatar" aria-hidden="true">DO</span>
+              <span class="who"><b>Dayo Okafor</b><span>COO, Hexbyte</span></span>
+            </figcaption>
+          </figure>
+        </li>
+        <li>
+          <figure class="quote-card">
+            <blockquote>The scenario planner paid for itself in one board meeting. We modeled three pricing paths live, in the room, on real data.</blockquote>
+            <figcaption>
+              <span class="avatar" aria-hidden="true">MR</span>
+              <span class="who"><b>Marta Reyes</b><span>CFO, Solstice</span></span>
+            </figcaption>
+          </figure>
+        </li>
+        <li>
+          <figure class="quote-card">
+            <blockquote>I stopped writing the weekly business review. Meridian drafts it from the warehouse and it is genuinely better than mine was.</blockquote>
+            <figcaption>
+              <span class="avatar" aria-hidden="true">TL</span>
+              <span class="who"><b>Tomas Lind</b><span>Head of Analytics, Copperleaf</span></span>
+            </figcaption>
+          </figure>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ── FAQ ──────────────────────────────────────────────── -->
+  <section class="section below-fold reveal" id="faq" aria-labelledby="faq-title">
+    <div class="section-head">
+      <span class="eyebrow">FAQ</span>
+      <h2 id="faq-title">Questions, answered</h2>
+    </div>
+    <div class="faq-list">
+      <details name="faq" open>
+        <summary>How accurate are the forecasts?</summary>
+        <div class="answer"><p>Every forecast ships with its own scorecard. Across customers, our 30-day revenue projections land within 4.2% median absolute error — and Meridian shows you its historical accuracy per metric, so you always know how much to trust it.</p></div>
+      </details>
+      <details name="faq">
+        <summary>Does my data leave our warehouse?</summary>
+        <div class="answer"><p>No. Meridian pushes computation down to Snowflake, BigQuery, or Postgres and reads only aggregates. Raw rows stay where they live, governed by your existing access controls.</p></div>
+      </details>
+      <details name="faq">
+        <summary>How long does setup take?</summary>
+        <div class="answer"><p>Most teams connect a warehouse and see their first forecasts in under an hour. Metric definitions import from dbt automatically; the model calibrates on your history overnight.</p></div>
+      </details>
+      <details name="faq">
+        <summary>What counts as a "builder"?</summary>
+        <div class="answer"><p>Anyone who creates or edits models, scenarios, or metric definitions. Viewers — people who read dashboards, briefs, and alerts — are free and unlimited on every plan.</p></div>
+      </details>
+      <details name="faq">
+        <summary>Can we cancel anytime?</summary>
+        <div class="answer"><p>Yes. Plans are month-to-month, exports are one click, and your metric definitions are plain YAML in your own repo. No lock-in — we would rather keep you with good forecasts.</p></div>
+      </details>
+    </div>
+  </section>
+
+  <!-- ── Final CTA ────────────────────────────────────────── -->
+  <section class="section below-fold reveal" aria-labelledby="cta-title">
+    <div class="cta-final">
+      <span class="eyebrow">Get ahead</span>
+      <h2 id="cta-title">Know next quarter this quarter</h2>
+      <p>Join the beta list and get the forecast playbook we wrote from 400 customer models.</p>
+      <form class="signup" novalidate="">
+        <div class="field">
+          <label class="visually-hidden" for="signup-email">Work email</label>
+          <input type="email" id="signup-email" name="email" placeholder="you@company.com" required>
+          <button class="btn btn-primary" type="submit">Request access</button>
+        </div>
+        <p class="error" role="alert">Please enter a valid work email address.</p>
+        <label class="consent">
+          <input type="checkbox" name="consent" required>
+          Send me the playbook and occasional product news
+        </label>
+        <p class="success">You're on the list — the playbook is on its way. ✦</p>
+      </form>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <a class="brand-mark" href="#top" aria-label="Meridian home">
+      <svg viewBox="0 0 32 32" aria-hidden="true">
+        <circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="3" opacity="0.5"/>
+        <circle cx="16" cy="16" r="4" fill="currentColor"/>
+      </svg>
+      Meridian
+    </a>
+    <nav aria-label="Footer">
+      <a href="#features">Features</a>
+      <a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a>
+      <a href="#top">Security</a>
+      <a href="#top">Privacy</a>
+    </nav>
+    <p>© 2026 Meridian Analytics, Inc.</p>
+  </div>
+</footer>
+
+<!-- ── Get-started modal: top layer, focus-managed, light dismiss ── -->
+<dialog class="modal" id="get-started" closedby="any" aria-labelledby="modal-title">
+  <button class="close-x" commandfor="get-started" command="close" aria-label="Close dialog">✕</button>
+  <h2 id="modal-title">Start your free trial</h2>
+  <p>Fourteen days of forecasts on your own data. No credit card, no sales call unless you ask for one.</p>
+  <form method="dialog">
+    <label for="trial-name">Name</label>
+    <input id="trial-name" name="name" type="text" autocomplete="name" required>
+    <label for="trial-email">Work email</label>
+    <input id="trial-email" name="email" type="email" autocomplete="email" required>
+    <label for="trial-goal">What do you want to forecast? <small>(optional)</small></label>
+    <textarea id="trial-goal" name="goal" placeholder="e.g. Net revenue retention by cohort"></textarea>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" type="button" commandfor="get-started" command="close">Not now</button>
+      <button class="btn btn-primary" type="submit">Create workspace</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+  // Tiny fallback for invoker commands (Tier C) — no-op where native.
+  for (const btn of document.querySelectorAll("button[commandfor]")) {
+    if ("commandForElement" in btn) continue;
+    const target = document.getElementById(btn.getAttribute("commandfor"));
+    const cmd = btn.getAttribute("command");
+    btn.addEventListener("click", () => {
+      if (!target) return;
+      if (cmd === "show-modal") target.showModal();
+      else if (cmd === "close") target.close();
+    });
+  }
+  // Signup demo: swap to the success state; CSS handles the rest.
+  const signup = document.querySelector(".signup");
+  signup.addEventListener("submit", (e) => {
+    e.preventDefault();
+    if (signup.checkValidity()) signup.dataset.submitted = "";
+    else signup.reportValidity();
+  });
+</script>
+</body>
+</html>
