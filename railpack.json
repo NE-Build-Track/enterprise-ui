@@ -1,5 +1,10 @@
 {
   "$schema": "https://schema.railpack.com",
+  "steps": {
+    "build": {
+      "commands": ["env -u NPM_CONFIG_PRODUCTION npm run build"]
+    }
+  },
   "deploy": {
     "startCommand": "env -u NPM_CONFIG_PRODUCTION npm run start"
   }
