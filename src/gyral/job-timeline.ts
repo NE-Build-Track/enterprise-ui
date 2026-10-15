@@ -39,8 +39,8 @@ const TechnicalRow = (attempt: Attempt): TemplateResult => html`
   <tr>
     <td>${attempt.number}</td>
     <td>${attempt.runner_url ?? ""}</td>
-    <td>${attempt.manifest_id ?? ""}</td>
-    <td>${attempt.auth_ids.join(", ")}</td>
+    <td>${attempt.sessions.map((session) => session.manifest_id).join(", ")}</td>
+    <td>${attempt.sessions.map((session) => session.payment_session_id ?? session.match).join(", ")}</td>
   </tr>
 `;
 
@@ -108,13 +108,13 @@ export const JobTimeline = define<State, Msg, Props, TimelineOutput>()("lp-job-t
           ? html`<details>
               <summary>Technical details</summary>
               <table>
-                <caption>Runner, manifest, and auth for each attempt</caption>
+                <caption>Runner, manifest, and payment session for each attempt</caption>
                 <thead>
                   <tr>
                     <th scope="col">#</th>
                     <th scope="col">Runner</th>
                     <th scope="col">Manifest</th>
-                    <th scope="col">Auth ids</th>
+                    <th scope="col">Payment session</th>
                   </tr>
                 </thead>
                 <tbody>

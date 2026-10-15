@@ -1,7 +1,17 @@
-import { define, html, outputs, prop } from "@gyral/core";
+import { define, html, outputs, prop, type Next } from "@gyral/core";
 import { request, type HttpError } from "@gyral/http";
 import { delay } from "@gyral/time";
 
+import {
+  alignMediaType,
+  coerceField,
+  formFields,
+  missingRequired,
+  schemaAt,
+  writePath,
+  type FormField,
+  type SchemaNode,
+} from "@/lib/capability-schema";
 import { isRecord, isJob } from "@/lib/engine/errors";
 import { examplePayload } from "@/lib/example-payload";
 import type { JobRequest, Offering } from "@/lib/engine/types";
@@ -14,10 +24,13 @@ type Method = (typeof METHODS)[number];
 
 export type JobRunnerOutput =
   | { readonly _tag: "AppSelected"; readonly app: string }
+  | { readonly _tag: "OfferingRemembered"; readonly app: string }
   | { readonly _tag: "JobCompleted"; readonly jobId: string | null; readonly conflict: boolean; readonly operationRef: string };
 
 type Props = {
   readonly offerings: readonly Offering[];
+  /** `null` until the page has read the last offering. An empty string means nothing was saved. */
+  readonly remembered: string | null;
 };
 
 export type RunnerState = {
@@ -26,6 +39,10 @@ export type RunnerState = {
   readonly method: Method;
   readonly payloadText: string;
   readonly prefilled: boolean;
+  readonly editor: "fields" | "json";
+  readonly schemaPhase: "idle" | "loading" | "ready" | "absent" | "blocked";
+  readonly schemaJson: string;
+  readonly requiredKeys: readonly string[];
   readonly operationRef: string;
   readonly maxAttempts: string;
   readonly timeoutS: string;
@@ -40,6 +57,8 @@ export type RunnerState = {
   readonly error: string;
   readonly jobId: string | null;
   readonly conflict: boolean;
+  /** Set when the user picks an offering, including clearing it. */
+  readonly offeringChosen: boolean;
 };
 
 type Msg =
@@ -47,6 +66,11 @@ type Msg =
   | { readonly _tag: "Path"; readonly value: string }
   | { readonly _tag: "Method"; readonly value: Method }
   | { readonly _tag: "Payload"; readonly value: string }
+  | { readonly _tag: "Editor"; readonly value: "fields" | "json" }
+  | { readonly _tag: "Field"; readonly path: string; readonly value: string }
+  | { readonly _tag: "SchemaReady"; readonly app: string; readonly schema: SchemaNode; readonly example: Record<string, unknown>; readonly required: readonly string[] }
+  | { readonly _tag: "SchemaAbsent"; readonly app: string }
+  | { readonly _tag: "SchemaBlocked"; readonly app: string; readonly message: string }
   | { readonly _tag: "Attempts"; readonly value: string }
   | { readonly _tag: "Timeout"; readonly value: string }
   | { readonly _tag: "Capability"; readonly value: string }
@@ -61,8 +85,21 @@ type Msg =
 
 const emit = outputs<JobRunnerOutput>();
 
+const COMPOSE_OFFERING = "comfystream/ffmpeg-compose";
+
+export function chooseOffering(offerings: readonly { readonly app: string }[], remembered: string): string {
+  if (remembered && offerings.some((item) => item.app === remembered)) return remembered;
+  if (offerings.some((item) => item.app === COMPOSE_OFFERING)) return COMPOSE_OFFERING;
+  return offerings[0]?.app ?? "";
+}
+
+function isRemembered(value: unknown): value is string | null {
+  return value === null || typeof value === "string";
+}
+
 const props = {
   offerings: prop.value(listOf(isOffering), { default: [], equals: sameJson }),
+  remembered: prop.value(isRemembered, { default: null }),
 };
 
 function nextOperationRef(): string {
@@ -88,8 +125,15 @@ export function parsePayload(text: string): { ok: true; value: Record<string, un
 export function jobBody(state: RunnerState): { ok: true; value: JobRequest } | { ok: false; message: string } {
   if (!state.app) return { ok: false, message: "Choose an offering." };
   if (state.path !== "" && !state.path.startsWith("/")) return { ok: false, message: "Path must start with /." };
+  if (state.schemaPhase === "loading") return { ok: false, message: "The request schema is still loading." };
+  if (state.schemaPhase === "blocked") {
+    return { ok: false, message: state.error || "The request schema could not be loaded." };
+  }
   const payload = parsePayload(state.payloadText);
   if (!payload.ok) return payload;
+  const missing = missingRequired(payload.value, state.requiredKeys);
+  if (missing.length === 1) return { ok: false, message: `${missing[0]} is required` };
+  if (missing.length > 1) return { ok: false, message: `${missing.join(", ")} are required` };
   const maxAttempts = Number(state.maxAttempts);
   const timeout = Number(state.timeoutS);
   if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 10) {
@@ -184,19 +228,166 @@ function statusView(state: RunnerState, viewIntent: string) {
   `;
 }
 
+function schemaRequest(app: string) {
+  return request(
+    { url: `/api/capability-schema?app=${encodeURIComponent(app)}`, method: "GET" },
+    {
+      onSuccess: (body) => schemaReady(app, body),
+      onFailure: (error) => schemaFailure(app, error),
+    },
+  );
+}
+
+function schemaReady(app: string, body: unknown): Msg {
+  if (!isRecord(body) || !isRecord(body.schema) || !isRecord(body.example) || !Array.isArray(body.required)) {
+    return { _tag: "SchemaBlocked", app, message: "The request schema could not be read." };
+  }
+  const required = body.required.filter((item): item is string => typeof item === "string");
+  return { _tag: "SchemaReady", app, schema: body.schema as SchemaNode, example: body.example, required };
+}
+
+function schemaFailure(app: string, error: HttpError): Msg {
+  if (error._tag === "HttpStatusError" && error.status === 404) return { _tag: "SchemaAbsent", app };
+  if (error._tag === "HttpStatusError" && isRecord(error.body) && typeof error.body.error === "string") {
+    return { _tag: "SchemaBlocked", app, message: error.body.error };
+  }
+  const message = error._tag === "HttpNetworkError" ? error.message : "The request schema could not be loaded.";
+  return { _tag: "SchemaBlocked", app, message };
+}
+
+function readSchema(text: string): SchemaNode | null {
+  if (!text) return null;
+  try {
+    const parsed: unknown = JSON.parse(text);
+    return isRecord(parsed) ? (parsed as SchemaNode) : null;
+  } catch {
+    return null;
+  }
+}
+
+function isEditor(value: string | undefined): value is "fields" | "json" {
+  return value === "fields" || value === "json";
+}
+
+function requestEditor(state: RunnerState, fieldIntent: string, payloadIntent: string, editorIntent: string) {
+  const fields = state.editor === "fields";
+  return html`<fieldset class="request-editor">
+    <legend>Request</legend>
+    <div class="request-tabs">
+      <label>
+        <input type="radio" name="request-editor" value="fields" ?checked=${fields} data-intent=${editorIntent} />
+        Fields
+      </label>
+      <label>
+        <input type="radio" name="request-editor" value="json" ?checked=${!fields} data-intent=${editorIntent} />
+        <abbr title="JavaScript Object Notation">JSON</abbr>
+      </label>
+    </div>
+    ${fields ? fieldsPanel(state, fieldIntent) : jsonPanel(state, payloadIntent)}
+  </fieldset>`;
+}
+
+function fieldsPanel(state: RunnerState, intent: string) {
+  if (state.schemaPhase === "loading") return html`<p role="status">Loading request schema…</p>`;
+  const schema = state.schemaPhase === "ready" ? readSchema(state.schemaJson) : null;
+  const fields = schema ? formFields(schema, parsedPayload(state.payloadText)) : [];
+  if (!schema || fields.length === 0) return html`<p>No field form for this offering. Use JSON.</p>`;
+  return html`${renderTree(fields, intent)}
+    <p>Fields from this app's schema. Extra JSON keys are kept.</p>`;
+}
+
+function jsonPanel(state: RunnerState, intent: string) {
+  return html`<label>
+      Payload <abbr title="JavaScript Object Notation">JSON</abbr> (optional)
+      <textarea data-intent=${intent} spellcheck="false">${state.payloadText}</textarea>
+    </label>
+    ${
+      state.prefilled
+        ? html`<p>Example inputs for this single-shot app. Replace placeholder URLs before you run it.</p>`
+        : ""
+    }`;
+}
+
+function parsedPayload(text: string): Record<string, unknown> | null {
+  const parsed = parsePayload(text);
+  return parsed.ok ? parsed.value : null;
+}
+
+function renderTree(fields: readonly FormField[], intent: string) {
+  return html`<ul class="tree">${fields.map((field) => renderNode(field, intent))}</ul>`;
+}
+
+function renderNode(field: FormField, intent: string): ReturnType<typeof html> {
+  if (field.kind === "group") {
+    return html`<li>
+      <details open>
+        <summary>${field.label}</summary>
+        <ul>
+          ${field.fields.map((child) => renderNode(child, intent))}
+        </ul>
+      </details>
+    </li>`;
+  }
+  if (field.kind === "enum") {
+    return html`<li>
+      <label>
+        ${field.label}
+        <select data-intent=${intent} data-path=${field.path} title=${field.title}>
+          ${field.options.map((option) => html`<option value=${option} ?selected=${option === field.value}>${option}</option>`)}
+        </select>
+      </label>
+    </li>`;
+  }
+  return html`<li>
+    <label>
+      ${field.label}
+      <input
+        inputmode=${field.kind === "number" ? "decimal" : "text"}
+        value=${field.value}
+        data-intent=${intent}
+        data-path=${field.path}
+        title=${field.title}
+        spellcheck="false"
+      />
+    </label>
+  </li>`;
+}
+
 function completed(state: RunnerState, jobId: string | null, conflict: boolean) {
   return emit({ _tag: "JobCompleted", jobId, conflict, operationRef: state.operationRef });
 }
 
-export const JobRunner = define<RunnerState, Msg, Props, JobRunnerOutput>()("lp-job-runner", {
-  props,
-  styles: widgetStyles,
-  init: () => ({
+function openOffering(state: RunnerState, app: string, offeringChosen: boolean): Next<RunnerState, Msg> {
+  const next = {
+    ...state,
+    app,
+    payloadText: "",
+    prefilled: false,
+    schemaPhase: app ? ("loading" as const) : ("idle" as const),
+    schemaJson: "",
+    requiredKeys: [],
+    error: "",
+    offeringChosen,
+  };
+  const commands = [
+    ...(offeringChosen ? [emit({ _tag: "OfferingRemembered" as const, app })] : []),
+    emit({ _tag: "AppSelected" as const, app }),
+    ...(app ? [schemaRequest(app)] : []),
+  ];
+  return [next, commands];
+}
+
+function blankRunner(): RunnerState {
+  return {
     app: "",
     path: "",
     method: "POST",
     payloadText: "",
     prefilled: false,
+    editor: "fields",
+    schemaPhase: "idle",
+    schemaJson: "",
+    requiredKeys: [],
     operationRef: "",
     maxAttempts: "1",
     timeoutS: "30",
@@ -211,12 +402,30 @@ export const JobRunner = define<RunnerState, Msg, Props, JobRunnerOutput>()("lp-
     error: "",
     jobId: null,
     conflict: false,
-  }),
+    offeringChosen: false,
+  };
+}
+
+export const JobRunner = define<RunnerState, Msg, Props, JobRunnerOutput>()("lp-job-runner", {
+  props,
+  styles: widgetStyles,
+  init: (initial) => {
+    const state = blankRunner();
+    if (initial.remembered === null) return state;
+    const app = chooseOffering(initial.offerings, initial.remembered);
+    return app ? openOffering(state, app, false) : state;
+  },
   intent: {
     App: ({ value }) => ({ _tag: "App", value: value ?? "" }),
     Path: ({ value }) => ({ _tag: "Path", value: value ?? "" }),
     Method: ({ value }) => (isMethod(value) ? { _tag: "Method", value } : undefined),
     Payload: ({ value }) => ({ _tag: "Payload", value: value ?? "" }),
+    Editor: ({ value }) => (isEditor(value) ? { _tag: "Editor", value } : undefined),
+    Field: ({ value, target }) => {
+      const path = target.getAttribute("data-path");
+      if (!path) return undefined;
+      return { _tag: "Field", path, value: value ?? "" };
+    },
     Attempts: ({ value }) =>
       value !== undefined && /^\d+$/.test(value) ? { _tag: "Attempts", value } : undefined,
     Timeout: ({ value }) =>
@@ -228,17 +437,64 @@ export const JobRunner = define<RunnerState, Msg, Props, JobRunnerOutput>()("lp-
     View: true,
   },
   update: {
-    App: (s, m, ctx) => {
-      const offering = ctx.props.offerings.find((item) => item.app === m.value);
+    App: (s, m) => openOffering(s, m.value, true),
+    PropsChanged: (s, m) => {
+      if (s.offeringChosen || s.app || m.props.remembered === null) return s;
+      const app = chooseOffering(m.props.offerings, m.props.remembered);
+      return app ? openOffering(s, app, false) : s;
+    },
+    SchemaReady: (s, m) => {
+      if (s.app !== m.app) return s;
+      return {
+        ...s,
+        schemaPhase: "ready",
+        schemaJson: JSON.stringify(m.schema),
+        requiredKeys: m.required,
+        payloadText: JSON.stringify(m.example, null, 2),
+        prefilled: true,
+        error: "",
+      };
+    },
+    SchemaAbsent: (s, m, ctx) => {
+      if (s.app !== m.app) return s;
+      const offering = ctx.props.offerings.find((item) => item.app === m.app);
       const example = offering ? examplePayload(offering.app, offering.modes) : "";
-      return [
-        { ...s, app: m.value, payloadText: example, prefilled: example !== "" },
-        [emit({ _tag: "AppSelected", app: m.value })],
-      ];
+      return {
+        ...s,
+        schemaPhase: "absent",
+        schemaJson: "",
+        requiredKeys: [],
+        payloadText: example,
+        prefilled: example !== "",
+        error: "",
+      };
+    },
+    SchemaBlocked: (s, m) => {
+      if (s.app !== m.app) return s;
+      return {
+        ...s,
+        schemaPhase: "blocked",
+        schemaJson: "",
+        requiredKeys: [],
+        payloadText: "",
+        prefilled: false,
+        error: m.message,
+      };
     },
     Path: (s, m) => ({ ...s, path: m.value }),
     Method: (s, m) => ({ ...s, method: m.value }),
     Payload: (s, m) => ({ ...s, payloadText: m.value, prefilled: false }),
+    Editor: (s, m) => ({ ...s, editor: m.value }),
+    Field: (s, m) => {
+      const parsed = parsePayload(s.payloadText);
+      if (!parsed.ok) return { ...s, error: parsed.message };
+      if (!parsed.value) return { ...s, error: "Payload must be a JSON object." };
+      const schema = readSchema(s.schemaJson);
+      const path = m.path.split(".");
+      const written = alignMediaType(writePath(parsed.value, path, coerceField(schema ? schemaAt(schema, path) : null, m.value)), path);
+      if (!isRecord(written)) return s;
+      return { ...s, payloadText: JSON.stringify(written, null, 2), prefilled: false, error: "" };
+    },
     Attempts: (s, m) => ({ ...s, maxAttempts: m.value }),
     Timeout: (s, m) => ({ ...s, timeoutS: m.value }),
     Capability: (s, m) => ({ ...s, capability: m.value }),
@@ -247,7 +503,10 @@ export const JobRunner = define<RunnerState, Msg, Props, JobRunnerOutput>()("lp-
       const operationRef = nextOperationRef();
       const built = jobBody({ ...s, operationRef });
       if (!built.ok) return { ...s, error: built.message, phase: "failed" as const };
-      return [{ ...s, phase: "running" as const, error: "", conflict: false, operationRef }, [post(built.value)]];
+      return [
+        { ...s, phase: "running" as const, error: "", conflict: false, operationRef },
+        [emit({ _tag: "OfferingRemembered", app: s.app }), post(built.value)],
+      ];
     },
     View: (s) => [s, s.jobId ? [completed(s, s.jobId, s.conflict)] : []],
     Retry: (s) => {
@@ -315,15 +574,7 @@ export const JobRunner = define<RunnerState, Msg, Props, JobRunnerOutput>()("lp-
           ${METHODS.map((method) => html`<option value=${method} ?selected=${s.method === method}>${method}</option>`)}
         </select>
       </label>
-      <label>
-        Payload <abbr title="JavaScript Object Notation">JSON</abbr> (optional)
-        <textarea data-intent=${i.Payload} spellcheck="false">${s.payloadText}</textarea>
-      </label>
-      ${
-        s.prefilled
-          ? html`<p>Example inputs for this single-shot app. Replace placeholder URLs before you run it.</p>`
-          : ""
-      }
+      ${requestEditor(s, i.Field, i.Payload, i.Editor)}
       ${
         s.operationRef
           ? html`<label>
@@ -344,7 +595,9 @@ export const JobRunner = define<RunnerState, Msg, Props, JobRunnerOutput>()("lp-
         </fieldset>
       </details>
       <div class="cluster">
-        <button type="submit" ?disabled=${s.phase === "running"}>Run job</button>
+        <button type="submit" ?disabled=${s.phase === "running" || s.schemaPhase === "loading" || s.schemaPhase === "blocked"}>
+          Run job
+        </button>
         <button type="button" class="quiet" data-intent=${i.Retry} ?disabled=${s.phase === "running" || !s.operationRef}>
           Retry last job
         </button>

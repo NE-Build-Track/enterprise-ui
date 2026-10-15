@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 
 import { engineUrl } from "@/lib/config";
+import { createEngineCall } from "@/lib/engine/client";
+import { isRecord } from "@/lib/engine/errors";
+import { adminCall } from "@/lib/engine/server";
 import { engineFailure, readBody } from "@/lib/http";
 import { authenticateKey } from "@/lib/login";
-import { isRecord } from "@/lib/engine/errors";
+import { resolveActor } from "@/lib/resolve-actor";
 import { clearSession, readSession, writeSession } from "@/lib/session";
 
 export async function GET(): Promise<Response> {
@@ -17,16 +20,21 @@ export async function POST(request: Request): Promise<Response> {
   try {
     const token = form ? await tokenFromForm(request) : await tokenFromJson(request);
     const login = await authenticateKey(engineUrl(), token);
-    await writeSession(login);
+    const actor = await resolveActor(createEngineCall(engineUrl(), token), adminCall(), token, {
+      actorId: login.actorId,
+      applicationId: login.applicationId,
+    });
+    const claims = actor ? { ...login, actorId: actor.actorId, applicationId: actor.applicationId } : login;
+    await writeSession(claims);
     if (form) {
-      const path = login.role === "operator" ? "/operator" : "/dashboard";
+      const path = claims.role === "operator" ? "/operator" : "/dashboard";
       return NextResponse.redirect(new URL(path, request.url), 303);
     }
     return Response.json({
-      role: login.role,
-      actorId: login.actorId,
-      applicationId: login.applicationId,
-      provisioned: login.provisioned,
+      role: claims.role,
+      actorId: claims.actorId,
+      applicationId: claims.applicationId,
+      provisioned: claims.provisioned,
     });
   } catch (error) {
     if (form) return NextResponse.redirect(new URL("/login?error=rejected", request.url), 303);

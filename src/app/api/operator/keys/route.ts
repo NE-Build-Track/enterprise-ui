@@ -23,13 +23,13 @@ export async function POST(request: Request): Promise<Response> {
         label: typeof body.label === "string" ? body.label : "operator",
         permissions: null,
       });
-      return Response.json({ token: issued.token, key: issued.key }, { status: 201 });
+      return Response.json({ token: issued.token, key: issued.key }, { status: 201, headers: { "Cache-Control": "no-store" } });
     }
     const issued = await issueActorKey(adminCall(), {
       actorId: body.actorId,
       applicationId: applicationId(),
       label: typeof body.label === "string" ? body.label : "",
     });
-    return Response.json({ token: issued.token, key: issued.key }, { status: 201 });
+    return Response.json({ token: issued.token, key: issued.key }, { status: 201, headers: { "Cache-Control": "no-store" } });
   });
 }

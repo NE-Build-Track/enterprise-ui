@@ -1,6 +1,6 @@
 "use client";
 
-import { createElement, useEffect, useRef, useState } from "react";
+import { createElement, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 type Props = {
   readonly tag: string;
@@ -29,7 +29,7 @@ export function GyralElement({ tag, load, props, onOutput, label }: Props) {
     };
   }, [load, tag]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const element = ref.current;
     if (!element || !ready) return;
     for (const [key, value] of Object.entries(props)) {

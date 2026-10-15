@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { flushSync } from "react-dom";
 
 import { api } from "@/lib/client-api";
 import { isRecord } from "@/lib/engine/errors";
@@ -8,12 +9,36 @@ import { isRecord } from "@/lib/engine/errors";
 export default function SignupPage() {
   const [error, setError] = useState("");
   const [token, setToken] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState("");
+
+  const dismiss = useCallback(() => {
+    setToken("");
+    setCopied(false);
+    setCopyError("");
+  }, []);
+
+  useEffect(() => {
+    const drop = () => {
+      flushSync(dismiss);
+    };
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) drop();
+    };
+    window.addEventListener("pagehide", drop);
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      window.removeEventListener("pagehide", drop);
+      window.removeEventListener("pageshow", onPageShow);
+    };
+  }, [dismiss]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     const result = await api("/api/signup", {
       method: "POST",
+      cache: "no-store",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         inviteCode: String(data.get("inviteCode") ?? ""),
@@ -26,7 +51,21 @@ export default function SignupPage() {
       return;
     }
     setToken(result.body.token);
+    setCopied(false);
+    setCopyError("");
     setError("");
+  }
+
+  async function copyKey(): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(token);
+      setCopied(true);
+      setCopyError("");
+    } catch (cause) {
+      setCopied(false);
+      setCopyError(cause instanceof Error ? cause.message : "The key could not be copied.");
+    }
+    document.getElementById("issued-key")?.focus();
   }
 
   return (
@@ -59,9 +98,39 @@ export default function SignupPage() {
             </p>
           ) : null}
           {token ? (
-            <p role="status">
-              Shown once. Sign in with <code>{token}</code>
-            </p>
+            <div className="once">
+              <p id="issued-note">Shown once. Copy this key, then close it. It is not saved in the browser.</p>
+              <div className="once-row">
+                <input
+                  id="issued-key"
+                  className="secret"
+                  readOnly
+                  value={token}
+                  autoComplete="off"
+                  autoCapitalize="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  translate="no"
+                  data-1p-ignore="true"
+                  data-lpignore="true"
+                  data-bwignore="true"
+                  data-form-type="other"
+                  aria-labelledby="issued-note"
+                  onFocus={(event) => event.currentTarget.select()}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") event.preventDefault();
+                  }}
+                />
+                <button type="button" onClick={() => void copyKey()}>
+                  Copy
+                </button>
+                <button type="button" className="quiet" onClick={dismiss}>
+                  Close
+                </button>
+              </div>
+              {copied ? <p role="status">Copied.</p> : null}
+              {copyError ? <p role="alert">{copyError}</p> : null}
+            </div>
           ) : null}
           <button type="submit">Issue key</button>
           <p>

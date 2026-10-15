@@ -23,7 +23,7 @@ export async function POST(request: Request): Promise<Response> {
     });
     return Response.json(
       { token: issued.token, key: issued.key },
-      { status: 201 },
+      { status: 201, headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
     return engineFailure(error);

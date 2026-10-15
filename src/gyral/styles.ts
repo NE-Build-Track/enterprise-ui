@@ -170,6 +170,64 @@ export const widgetStyles = css`
       padding: 0;
     }
 
+    .request-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+
+    .request-tabs label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      inline-size: fit-content;
+      min-block-size: 2.75rem;
+      border: 1px solid var(--border, oklch(89% 0.026 79));
+      border-radius: 999px;
+      padding-block: 0.2rem;
+      padding-inline: 0.75rem;
+      cursor: pointer;
+    }
+
+    .request-tabs label:has(:checked) {
+      border-color: var(--text, oklch(21.5% 0.009 82));
+      background: var(--text, oklch(21.5% 0.009 82));
+      color: var(--surface, oklch(95.3% 0.013 82));
+    }
+
+    .request-tabs label:focus-within {
+      outline: 2px solid var(--brand, oklch(40% 0.09 170));
+      outline-offset: 2px;
+    }
+
+    .tree,
+    .tree ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    .tree ul {
+      margin-inline-start: 0.55rem;
+      padding-inline-start: 0.75rem;
+      border-inline-start: 1px solid var(--border, oklch(89% 0.026 79));
+    }
+
+    .tree li {
+      margin-block: 0.4rem;
+    }
+
+    .tree summary {
+      min-block-size: 2rem;
+      font-weight: 650;
+    }
+
+    .tree label {
+      grid-template-columns: minmax(5.5rem, 8.5rem) minmax(0, 1fr);
+      align-items: center;
+      gap: 0.5rem;
+    }
+
     legend {
       padding: 0;
     }
@@ -186,6 +244,29 @@ export const widgetStyles = css`
       flex-wrap: wrap;
       gap: 0.5rem;
       align-items: end;
+    }
+
+    .once-row {
+      display: flex;
+      flex-wrap: nowrap;
+      align-items: center;
+      gap: 0.5rem;
+      max-inline-size: 100%;
+      overflow-x: auto;
+    }
+
+    .once-row button {
+      flex: none;
+      white-space: nowrap;
+    }
+
+    input.secret {
+      flex: 1 1 auto;
+      min-inline-size: 0;
+      font-family: ui-monospace, "IBM Plex Mono", monospace;
+      white-space: nowrap;
+      overflow-x: auto;
+      overflow-y: hidden;
     }
 
     meter {
@@ -214,8 +295,95 @@ export const widgetStyles = css`
       }
     }
 
-    tr:has([aria-current="true"]) {
+    tr:has([aria-current="true"]),
+    tr[data-selected="true"] {
       background: color-mix(in oklch, var(--brand, oklch(40% 0.09 170)) 14%, transparent);
+    }
+
+    table.jobs {
+      table-layout: fixed;
+    }
+
+    table.jobs col.state {
+      inline-size: 8.5rem;
+    }
+
+    table.jobs col.when {
+      inline-size: 9.5rem;
+    }
+
+    table.jobs th[scope="row"] {
+      font-weight: 400;
+      color: inherit;
+      font-size: inherit;
+      letter-spacing: 0;
+      text-transform: none;
+    }
+
+    table.jobs button.quiet {
+      min-block-size: 0;
+      border: 0;
+      border-radius: 0;
+      padding: 0;
+      text-align: start;
+      white-space: normal;
+    }
+
+    table.jobs .state,
+    table.jobs .when {
+      white-space: nowrap;
+    }
+
+    table.jobs tbody tr:not(.nested) > * {
+      border-block-end: 0;
+      padding-block-end: 0.15rem;
+    }
+
+    table.jobs tr.nested td {
+      padding-block-start: 0.1rem;
+    }
+
+    table.jobs .field {
+      display: block;
+      color: var(--text-muted, oklch(46% 0.018 81));
+      font-size: 0.75rem;
+      font-weight: 650;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    table.jobs tr.nested code {
+      overflow-wrap: anywhere;
+    }
+
+    @container (max-width: 28rem) {
+      table.jobs thead {
+        display: none;
+      }
+
+      table.jobs,
+      table.jobs tbody,
+      table.jobs tr,
+      table.jobs th,
+      table.jobs td {
+        display: block;
+        inline-size: auto;
+      }
+
+      table.jobs tr:not(.nested) {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 0.2rem 0.75rem;
+        padding-block-start: 0.65rem;
+      }
+
+      table.jobs tr:not(.nested) .when {
+        grid-column: 1 / -1;
+      }
+
+      table.jobs tr.nested td {
+        padding-block: 0.15rem 0.65rem;
+      }
     }
 
     .muted {

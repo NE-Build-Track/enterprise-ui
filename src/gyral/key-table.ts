@@ -1,4 +1,4 @@
-import { define, each, html, outputs, prop, type TemplateResult } from "@gyral/core";
+import { call, command, define, defineDriver, each, html, outputs, prop, type TemplateResult } from "@gyral/core";
 
 import type { AccessKey } from "@/lib/engine/types";
 
@@ -7,7 +7,8 @@ import { widgetStyles } from "./styles";
 
 export type KeyTableOutput =
   | { readonly _tag: "IssueKey"; readonly actorId: string; readonly label: string }
-  | { readonly _tag: "RevokeKey"; readonly keyId: string };
+  | { readonly _tag: "RevokeKey"; readonly keyId: string }
+  | { readonly _tag: "DismissKey" };
 
 type Issued = { readonly token: string; readonly actorId: string };
 
@@ -17,7 +18,14 @@ type Props = {
   readonly issued: Issued | null;
 };
 
-type State = { readonly actorId: string; readonly label: string; readonly pendingKeyId: string };
+type State = {
+  readonly actorId: string;
+  readonly label: string;
+  readonly pendingKeyId: string;
+  readonly copied: boolean;
+  readonly dismissed: boolean;
+  readonly copyError: string;
+};
 
 type Msg =
   | { readonly _tag: "Actor"; readonly value: string }
@@ -25,7 +33,21 @@ type Msg =
   | { readonly _tag: "Issue"; readonly actorId: string; readonly label: string }
   | { readonly _tag: "Ask"; readonly keyId: string }
   | { readonly _tag: "Cancel" }
-  | { readonly _tag: "Confirm" };
+  | { readonly _tag: "Confirm" }
+  | { readonly _tag: "Copy"; readonly token: string }
+  | { readonly _tag: "Copied" }
+  | { readonly _tag: "CopyFailed"; readonly message: string }
+  | { readonly _tag: "Select" }
+  | { readonly _tag: "Dismiss" };
+
+const clipboard = defineDriver<string, undefined, string>({
+  name: "clipboard",
+  run: async (text) => {
+    await navigator.clipboard.writeText(text);
+    return undefined;
+  },
+  toError: (cause) => (cause instanceof Error ? cause.message : "The key could not be copied."),
+});
 
 const emit = outputs<KeyTableOutput>();
 
@@ -58,7 +80,7 @@ export const KeyTable = define<State, Msg, Props, KeyTableOutput>()("lp-key-tabl
     issued: prop.value(orNull(isIssued), { default: null, equals: sameJson }),
   },
   styles: widgetStyles,
-  init: () => ({ actorId: "", label: "", pendingKeyId: "" }),
+  init: () => ({ actorId: "", label: "", pendingKeyId: "", copied: false, dismissed: false, copyError: "" }),
   intent: {
     Actor: ({ value }) => ({ _tag: "Actor", value: value ?? "" }),
     Label: ({ value }) => ({ _tag: "Label", value: value ?? "" }),
@@ -69,6 +91,12 @@ export const KeyTable = define<State, Msg, Props, KeyTableOutput>()("lp-key-tabl
     Ask: ({ value }) => (value ? { _tag: "Ask", keyId: value } : undefined),
     Cancel: true,
     Confirm: true,
+    Copy: (_input, ctx) => {
+      const token = ctx.props.issued?.token;
+      return token && !ctx.state.dismissed ? { _tag: "Copy", token } : undefined;
+    },
+    Select: true,
+    Dismiss: true,
   },
   update: {
     Actor: (s, m) => ({ ...s, actorId: m.value }),
@@ -80,15 +108,58 @@ export const KeyTable = define<State, Msg, Props, KeyTableOutput>()("lp-key-tabl
       s.pendingKeyId
         ? [{ ...s, pendingKeyId: "" }, [emit({ _tag: "RevokeKey", keyId: s.pendingKeyId })]]
         : s,
+    Copy: (s, m) => [
+      { ...s, copyError: "" },
+      [
+        command(clipboard, m.token, {
+          onSuccess: () => ({ _tag: "Copied" }),
+          onFailure: (message) => ({ _tag: "CopyFailed", message }),
+        }),
+      ],
+    ],
+    Copied: (s) => [{ ...s, copied: true, copyError: "" }, [call("#issued-key", "focus"), call("#issued-key", "select")]],
+    CopyFailed: (s, m) => [
+      { ...s, copied: false, copyError: m.message },
+      [call("#issued-key", "focus"), call("#issued-key", "select")],
+    ],
+    Select: (s) => [s, [call("#issued-key", "select")]],
+    Dismiss: (s) => [{ ...s, dismissed: true, copied: false, copyError: "" }, [emit({ _tag: "DismissKey" })]],
+    PropsChanged: (s, m) =>
+      m.props.issued?.token === m.prev.issued?.token ? s : { ...s, copied: false, dismissed: false, copyError: "" },
   },
   view: (s, i, ctx) => html`
     <p>Issuing a key does not move money. The actor must already have an allocation.</p>
     ${ctx.props.error ? html`<p role="alert">${ctx.props.error}</p>` : ""}
     ${
-      ctx.props.issued
-        ? html`<p role="status">
-            Key for <bdi>${ctx.props.issued.actorId}</bdi>. Shown once: <code>${ctx.props.issued.token}</code>
-          </p>`
+      ctx.props.issued && !s.dismissed
+        ? html`<div class="once">
+            <p id="issued-note">
+              Key for <bdi>${ctx.props.issued.actorId}</bdi>. Shown once. Copy it, then close this. It is not saved in the browser.
+            </p>
+            <div class="once-row">
+              <input
+                id="issued-key"
+                class="secret"
+                readonly
+                value=${ctx.props.issued.token}
+                autocomplete="off"
+                autocapitalize="off"
+                autocorrect="off"
+                spellcheck="false"
+                translate="no"
+                data-1p-ignore="true"
+                data-lpignore="true"
+                data-bwignore="true"
+                data-form-type="other"
+                aria-labelledby="issued-note"
+                data-intent-focus=${i.Select}
+              />
+              <button type="button" data-intent=${i.Copy}>Copy</button>
+              <button type="button" class="quiet" data-intent=${i.Dismiss}>Close</button>
+            </div>
+            ${s.copied ? html`<p role="status">Copied.</p>` : ""}
+            ${s.copyError ? html`<p role="alert">${s.copyError}</p>` : ""}
+          </div>`
         : ""
     }
     <form class="cluster" data-intent=${i.Issue}>

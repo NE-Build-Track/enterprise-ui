@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 
 import { api } from "@/lib/client-api";
 import { isRecord } from "@/lib/engine/errors";
@@ -17,22 +17,35 @@ export function Shell({
   readonly actorId: string | null;
   readonly children: React.ReactNode;
 }) {
-  const router = useRouter();
   const pathname = usePathname();
+  const leaving = useRef(false);
+  const [signingOut, setSigningOut] = useState(false);
+
+  function leave(): void {
+    if (leaving.current) return;
+    leaving.current = true;
+    // Soft navigation leaves the dashboard mounted, and its refresh loop keeps calling
+    // router.refresh(), so the login page never replaces that client state.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    window.location.assign("/login");
+  }
 
   useEffect(() => {
     const onUnauthorized = () => {
-      router.push("/login");
-      router.refresh();
+      leave();
     };
     window.addEventListener("lp-unauthorized", onUnauthorized);
     return () => window.removeEventListener("lp-unauthorized", onUnauthorized);
-  }, [router]);
+  }, []);
 
   async function signOut(): Promise<void> {
-    await fetch("/api/session", { method: "DELETE" });
-    router.push("/login");
-    router.refresh();
+    setSigningOut(true);
+    const response = await fetch("/api/session", { method: "DELETE" });
+    if (!response.ok) {
+      setSigningOut(false);
+      return;
+    }
+    leave();
   }
 
   return (
@@ -75,7 +88,7 @@ export function Shell({
           <p>
             <bdi>{actorId ?? "actor unknown"}</bdi>
           </p>
-          <button type="button" className="quiet" onClick={() => void signOut()}>
+          <button type="button" className="quiet" disabled={signingOut} onClick={() => void signOut()}>
             Sign out
           </button>
         </div>

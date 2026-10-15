@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import { GyralElement } from "@/components/GyralElement";
 import {
@@ -25,6 +25,49 @@ const isOfferings = listOf(isOffering);
 const isRunners = listOf(isRunner);
 
 const SPENT_CLASSES = ["delivered", "failed_after_payment", "uncertain"] as const;
+const JOB_POLL_MS = 3_000;
+const SUMMARY_POLL_MS = 30_000;
+const LAST_OFFERING_KEY = "lp-job-offering";
+
+function readLastOffering(): string {
+  try {
+    return localStorage.getItem(LAST_OFFERING_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function writeLastOffering(app: string): void {
+  try {
+    if (app) localStorage.setItem(LAST_OFFERING_KEY, app);
+    else localStorage.removeItem(LAST_OFFERING_KEY);
+  } catch {
+    // Private browsing can reject storage. The form still defaults for this visit.
+  }
+}
+
+function unchanged<T>(current: T, next: T): T {
+  return JSON.stringify(current) === JSON.stringify(next) ? current : next;
+}
+
+function useVisibleInterval(delayMs: number | null, tick: () => void): void {
+  useEffect(() => {
+    if (delayMs === null) return;
+    let timer: ReturnType<typeof setInterval> | undefined;
+    const arm = () => {
+      clearInterval(timer);
+      timer = undefined;
+      if (document.visibilityState === "hidden") return;
+      timer = setInterval(() => void tick(), delayMs);
+    };
+    arm();
+    document.addEventListener("visibilitychange", arm);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", arm);
+    };
+  }, [delayMs, tick]);
+}
 
 function openBilling(): void {
   const billing = document.getElementById("billing");
@@ -55,6 +98,7 @@ export function Dashboard({ actorId, role }: { readonly actorId: string | null; 
   const [jobs, setJobs] = useState<readonly Job[]>([]);
   const [jobsError, setJobsError] = useState("");
   const [offerings, setOfferings] = useState<readonly Offering[]>([]);
+  const [remembered, setRemembered] = useState<string | null>(null);
   const [app, setApp] = useState("");
   const [runners, setRunners] = useState<readonly Runner[]>([]);
   const [runnersError, setRunnersError] = useState("");
@@ -65,39 +109,61 @@ export function Dashboard({ actorId, role }: { readonly actorId: string | null; 
   const [usageError, setUsageError] = useState("");
   const [loaded, setLoaded] = useState(false);
 
-  const refresh = useCallback(async () => {
-    const [allowanceResult, summaryResult, jobsResult, offeringsResult, reconciliationResult] = await Promise.all([
+  const refreshJobs = useCallback(async () => {
+    const result = await api("/api/jobs?limit=50");
+    setJobs((current) => unchanged(current, result.ok && isJobs(result.body) ? result.body : []));
+    setJobsError(result.ok ? "" : result.error);
+  }, []);
+
+  const refreshSummary = useCallback(async () => {
+    const [allowanceResult, summaryResult, offeringsResult, reconciliationResult] = await Promise.all([
       api("/api/allowance"),
       api(`/api/costs/summary?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}`),
-      api("/api/jobs?limit=50"),
       api("/api/offerings"),
       api("/api/reconciliation"),
     ]);
-    setAllowance(allowanceResult.ok && isAllowance(allowanceResult.body) ? allowanceResult.body : null);
+    setAllowance((current) => unchanged(current, allowanceResult.ok && isAllowance(allowanceResult.body) ? allowanceResult.body : null));
     setAllowanceError(allowanceResult.ok ? "" : allowanceResult.error);
-    setSummary(summaryResult.ok && isCostSummary(summaryResult.body) ? summaryResult.body : null);
+    setSummary((current) => unchanged(current, summaryResult.ok && isCostSummary(summaryResult.body) ? summaryResult.body : null));
     setSummaryError(summaryResult.ok ? "" : summaryResult.error);
-    setJobs(jobsResult.ok && isJobs(jobsResult.body) ? jobsResult.body : []);
-    setJobsError(jobsResult.ok ? "" : jobsResult.error);
-    setOfferings(offeringsResult.ok && isOfferings(offeringsResult.body) ? offeringsResult.body : []);
-    setReconciliation(reconciliationResult.ok && isReconciliation(reconciliationResult.body) ? reconciliationResult.body : null);
-    setReconciliationError(
-      reconciliationResult.ok ? "" : actorId ? reconciliationResult.error : "This key was not issued here, so reconciliation needs an actor id.",
+    setOfferings((current) => unchanged(current, offeringsResult.ok && isOfferings(offeringsResult.body) ? offeringsResult.body : []));
+    setReconciliation((current) =>
+      unchanged(current, reconciliationResult.ok && isReconciliation(reconciliationResult.body) ? reconciliationResult.body : null),
     );
+    setReconciliationError(reconciliationResult.ok ? "" : reconciliationResult.error);
+  }, [end, start]);
+
+  const refresh = useCallback(async () => {
+    await Promise.all([refreshJobs(), refreshSummary()]);
     setLoaded(true);
-  }, [actorId, end, start]);
+  }, [refreshJobs, refreshSummary]);
+
+  useLayoutEffect(() => {
+    setRemembered(readLastOffering());
+  }, []);
+
+  const running = jobs.filter((job) => job.state === "running").length;
+  const wasRunning = useRef(false);
 
   useEffect(() => {
     const first = setTimeout(() => void refresh(), 0);
-    if (!jobs.some((job) => job.state === "running")) {
-      return () => clearTimeout(first);
-    }
-    const timer = setInterval(() => void refresh(), 3000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       clearTimeout(first);
-      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [jobs, refresh]);
+  }, [refresh]);
+
+  useVisibleInterval(running > 0 ? JOB_POLL_MS : null, refreshJobs);
+  useVisibleInterval(SUMMARY_POLL_MS, refresh);
+
+  useEffect(() => {
+    if (wasRunning.current && running === 0) void refreshSummary();
+    wasRunning.current = running > 0;
+  }, [refreshSummary, running]);
 
   useEffect(() => {
     if (!app) return;
@@ -123,6 +189,10 @@ export function Dashboard({ actorId, role }: { readonly actorId: string | null; 
   const onRunner = useCallback(
     (detail: unknown) => {
       if (!isRecord(detail)) return;
+      if (detail._tag === "OfferingRemembered" && typeof detail.app === "string") {
+        writeLastOffering(detail.app);
+        setRemembered(detail.app);
+      }
       if (detail._tag === "AppSelected" && typeof detail.app === "string") {
         setApp(detail.app);
         setRunners([]);
@@ -173,7 +243,6 @@ export function Dashboard({ actorId, role }: { readonly actorId: string | null; 
     [openJob, selected],
   );
 
-  const running = jobs.filter((job) => job.state === "running").length;
   const pending = jobs.filter((job) => job.state === "queued" || job.state === "uncertain").length;
   const balance = reconciliationStat(reconciliation);
   const allowanceTone = allowance?.status === "active" ? "ok" : allowance ? "wait" : undefined;
@@ -243,7 +312,7 @@ export function Dashboard({ actorId, role }: { readonly actorId: string | null; 
       <section aria-labelledby="run-heading">
         <h2 id="run-heading">Run a job</h2>
         <article className="panel">
-          <GyralElement tag="lp-job-runner" load={loadJobRunner} label="Job runner" props={{ offerings }} onOutput={onRunner} />
+          <GyralElement tag="lp-job-runner" load={loadJobRunner} label="Job runner" props={{ offerings, remembered }} onOutput={onRunner} />
           {app ? (
             <>
               <h3>Available runners</h3>

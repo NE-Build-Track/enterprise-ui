@@ -19,24 +19,34 @@ function stateTone(state: Job["state"]): "ok" | "bad" | "wait" {
   return "wait";
 }
 
-const Row = (job: Job, selectedId: string): TemplateResult => html`
-  <tr>
-    <td>
-      <button
-        type="button"
-        class="quiet"
-        value=${job.id}
-        data-intent="Open"
-        aria-current=${job.id === selectedId ? "true" : "false"}
-      >
-        ${job.app}
-      </button>
-      ${job.operation_ref ? html`<span class="muted"><code>${job.operation_ref}</code></span>` : ""}
-    </td>
-    <td><strong class="chip" data-tone=${stateTone(job.state)}>${job.state}</strong></td>
-    <td>${job.created_at ? html`<time datetime=${job.created_at}>${formatTime(job.created_at)}</time>` : ""}</td>
-  </tr>
-`;
+const Row = (job: Job, selectedId: string): TemplateResult => {
+  const selected = job.id === selectedId ? "true" : "false";
+  return html`
+    <tr data-selected=${selected}>
+      <th scope="row">
+        <button
+          type="button"
+          class="quiet"
+          value=${job.id}
+          data-intent="Open"
+          aria-current=${job.id === selectedId ? "true" : "false"}
+        >
+          ${job.app}
+        </button>
+      </th>
+      <td class="state"><strong class="chip" data-tone=${stateTone(job.state)}>${job.state}</strong></td>
+      <td class="when">
+        ${job.created_at ? html`<time datetime=${job.created_at}>${formatTime(job.created_at)}</time>` : ""}
+      </td>
+    </tr>
+    <tr class="nested" data-selected=${selected}>
+      <td colspan="3">
+        <span class="field">Operation ref</span>
+        ${job.operation_ref ? html`<code>${job.operation_ref}</code>` : html`<span class="muted">None</span>`}
+      </td>
+    </tr>
+  `;
+};
 
 export const JobList = define<{ readonly selectedId: string }, Msg, Props, JobListOutput>()("lp-job-list", {
   props: {
@@ -59,8 +69,13 @@ export const JobList = define<{ readonly selectedId: string }, Msg, Props, JobLi
       ${
         jobs.length === 0
           ? html`<p role="status">No jobs for this key yet.</p>`
-          : html`<table>
+          : html`<table class="jobs">
               <caption>Jobs for this key, newest first</caption>
+              <colgroup>
+                <col />
+                <col class="state" />
+                <col class="when" />
+              </colgroup>
               <thead>
                 <tr>
                   <th scope="col">App</th>

@@ -3,9 +3,12 @@ import { http } from "@gyral/http";
 import { inputsFor, outputsIn, step, viewOf } from "@gyral/testing";
 import { expect, it } from "vitest";
 
+import { exampleFromSchema, requestSchema, type SchemaNode } from "@/lib/capability-schema";
+
 import { BlockerChecklist } from "./blocker-checklist";
 import { CostBreakdown } from "./cost-breakdown";
-import { jobBody, JobRunner, type RunnerState } from "./job-runner";
+import { JobList } from "./job-list";
+import { chooseOffering, jobBody, JobRunner, type RunnerState } from "./job-runner";
 import { JobTimeline } from "./job-timeline";
 import { KeyTable } from "./key-table";
 
@@ -15,6 +18,10 @@ const runner: RunnerState = {
   method: "POST",
   payloadText: "",
   prefilled: false,
+  editor: "fields",
+  schemaPhase: "idle",
+  schemaJson: "",
+  requiredKeys: [],
   operationRef: "ref-1",
   maxAttempts: "1",
   timeoutS: "30",
@@ -29,30 +36,209 @@ const runner: RunnerState = {
   error: "",
   jobId: null,
   conflict: false,
+  offeringChosen: false,
 };
 
-it("fills a single-shot example when an offering is chosen", () => {
-  const next = step(
-    JobRunner.spec,
-    runner,
-    { _tag: "App", value: "flux-dev" },
-    {
-      offerings: [
-        {
-          app: "flux-dev",
-          modes: ["single-shot"],
-          rate_low: null,
-          rate_high: null,
-          runner_count: 1,
-          ready_count: 1,
-          observed_at: "2026-10-13T00:00:00.000Z",
-        },
-      ],
-    },
-  );
-  expect(next.state.prefilled).toBe(true);
-  expect(JSON.parse(next.state.payloadText)).toHaveProperty("prompt");
+const offering = {
+  app: "flux-dev",
+  modes: ["single-shot"],
+  rate_low: null,
+  rate_high: null,
+  runner_count: 1,
+  ready_count: 1,
+  observed_at: "2026-10-13T00:00:00.000Z",
+};
+
+it("chooses the last offering, then ffmpeg-compose, then the first", () => {
+  const alpha = { ...offering, app: "alpha" };
+  const compose = { ...offering, app: "comfystream/ffmpeg-compose" };
+  const zeta = { ...offering, app: "zeta" };
+  expect(chooseOffering([alpha, compose, zeta], "zeta")).toBe("zeta");
+  expect(chooseOffering([alpha, compose, zeta], "gone")).toBe("comfystream/ffmpeg-compose");
+  expect(chooseOffering([alpha, zeta], "")).toBe("alpha");
 });
+
+it("prefills the default offering once the saved choice is known", () => {
+  const alpha = { ...offering, app: "alpha" };
+  const compose = { ...offering, app: "comfystream/ffmpeg-compose" };
+  const idle = { ...runner, app: "", offeringChosen: false };
+  const offerings = [alpha, compose];
+  const waiting = step(
+    JobRunner.spec,
+    idle,
+    { _tag: "PropsChanged", props: { offerings, remembered: null }, prev: { offerings: [], remembered: null } },
+    { offerings, remembered: null },
+  );
+  expect(waiting.state.app).toBe("");
+  expect(waiting.commands).toHaveLength(0);
+
+  const selected = step(
+    JobRunner.spec,
+    waiting.state,
+    { _tag: "PropsChanged", props: { offerings, remembered: "" }, prev: { offerings, remembered: null } },
+    { offerings, remembered: "" },
+  );
+  expect(selected.state.app).toBe("comfystream/ffmpeg-compose");
+  expect(selected.state.prefilled).toBe(false);
+  expect(inputsFor(selected.commands, http)[0]).toMatchObject({
+    url: "/api/capability-schema?app=comfystream%2Fffmpeg-compose",
+    method: "GET",
+  });
+  const ready = step(JobRunner.spec, selected.state, {
+    _tag: "SchemaReady",
+    app: "comfystream/ffmpeg-compose",
+    schema: { type: "object", properties: { fps: { type: "number", default: 4 } } },
+    example: { fps: 4 },
+    required: [],
+  });
+  expect(ready.state.prefilled).toBe(true);
+  expect(JSON.parse(ready.state.payloadText)).toEqual({ fps: 4 });
+});
+
+it("keeps an offering the user already chose", () => {
+  const props = {
+    offerings: [{ ...offering, app: "comfystream/ffmpeg-compose" }],
+    remembered: "comfystream/ffmpeg-compose",
+  };
+  const kept = step(
+    JobRunner.spec,
+    { ...runner, offeringChosen: true },
+    { _tag: "PropsChanged", props, prev: { offerings: [], remembered: null } },
+    props,
+  );
+  expect(kept.state.app).toBe("livepeer/video");
+  expect(kept.commands).toHaveLength(0);
+});
+
+it("loads a request schema when an offering is chosen", () => {
+  const next = step(JobRunner.spec, runner, { _tag: "App", value: "flux-dev" }, { offerings: [offering], remembered: null });
+  expect(next.state.schemaPhase).toBe("loading");
+  expect(next.state.payloadText).toBe("");
+  expect(inputsFor(next.commands, http)[0]).toMatchObject({
+    url: "/api/capability-schema?app=flux-dev",
+    method: "GET",
+  });
+  const absent = step(JobRunner.spec, next.state, { _tag: "SchemaAbsent", app: "flux-dev" }, { offerings: [offering], remembered: null });
+  expect(absent.state.schemaPhase).toBe("absent");
+  expect(JSON.parse(absent.state.payloadText)).toHaveProperty("prompt");
+});
+
+it("renders images for the images schema and tracks for compose", () => {
+  const images = requestSchema({
+    format: "comfystream.ffmpeg.request.v1",
+    type: "object",
+    required: ["images"],
+    properties: {
+      fps: { default: 4, type: "number" },
+      images: {
+        minItems: 1,
+        type: "array",
+        items: {
+          type: "object",
+          required: ["url"],
+          properties: {
+            frames: { default: 1, type: "integer" },
+            url: { type: "string" },
+          },
+        },
+      },
+    },
+  });
+  if (!images.ok) throw new Error(images.error);
+  const imagesState = readyState("comfystream/ffmpeg-images-to-video", images.schema, ["images"]);
+  expect(JSON.parse(imagesState.payloadText)).toMatchObject({ images: [{ url: expect.any(String) }] });
+  expect(JSON.parse(imagesState.payloadText)).not.toHaveProperty("tracks");
+  const imagesHtml = renderToString(viewOf(JobRunner, imagesState, { props: { offerings: [], remembered: null } }), { dev: false });
+  expect(imagesHtml).toContain('data-path="fps"');
+  expect(imagesHtml).toContain("<summary>images</summary>");
+  expect(imagesHtml).not.toContain("<summary>tracks</summary>");
+  expect(imagesHtml).not.toContain("<textarea");
+
+  const compose = requestSchema({
+    format: "comfystream.ffmpeg.request.v1",
+    type: "object",
+    required: ["tracks"],
+    properties: {
+      fps: { default: 4, type: "number" },
+      tracks: {
+        minItems: 1,
+        type: "array",
+        items: {
+          type: "object",
+          required: ["keyframes"],
+          properties: {
+            id: { type: "string" },
+            type: { enum: ["video", "audio", "image"], type: "string" },
+            keyframes: {
+              minItems: 1,
+              type: "array",
+              items: {
+                type: "object",
+                required: ["url"],
+                properties: {
+                  url: { type: "string" },
+                  timestamp: { minimum: 0, type: "number" },
+                  duration: { description: "Length of this keyframe in milliseconds.", minimum: 0, type: "number" },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!compose.ok) throw new Error(compose.error);
+  const composeState = readyState("comfystream/ffmpeg-compose", compose.schema, ["tracks"]);
+  expect(JSON.parse(composeState.payloadText)).toHaveProperty("tracks");
+  expect(JSON.parse(composeState.payloadText)).not.toHaveProperty("images");
+  const composeHtml = renderToString(viewOf(JobRunner, composeState, { props: { offerings: [], remembered: null } }), { dev: false });
+  expect(composeHtml).toContain("<summary>tracks</summary>");
+  expect(composeHtml).toContain('value="image" selected');
+  const jsonHtml = renderToString(viewOf(JobRunner, { ...composeState, editor: "json" }, { props: { offerings: [], remembered: null } }), { dev: false });
+  expect(jsonHtml).toContain("<textarea");
+  expect(jsonHtml).not.toContain('data-path="fps"');
+  const switched = step(JobRunner.spec, composeState, { _tag: "Editor", value: "json" });
+  expect(switched.state.editor).toBe("json");
+  expect(switched.state.payloadText).toBe(composeState.payloadText);
+});
+
+it("blocks the form when the schema hash does not match", () => {
+  const blocked = step(JobRunner.spec, { ...runner, app: "comfystream/ffmpeg-compose" }, {
+    _tag: "SchemaBlocked",
+    app: "comfystream/ffmpeg-compose",
+    message: "schema hash does not match discovery",
+  });
+  expect(blocked.state.payloadText).toBe("");
+  expect(blocked.state.schemaPhase).toBe("blocked");
+  const html = renderToString(viewOf(JobRunner, blocked.state, { props: { offerings: [], remembered: null } }), { dev: false });
+  expect(html).toContain("schema hash does not match discovery");
+  expect(html).not.toContain("schema-fields");
+  expect(jobBody(blocked.state).ok).toBe(false);
+});
+
+it("does not submit a body that omits a schema-required key", () => {
+  const result = jobBody({
+    ...runner,
+    app: "comfystream/ffmpeg-images-to-video",
+    schemaPhase: "ready",
+    requiredKeys: ["images"],
+    payloadText: JSON.stringify({ fps: 4, tracks: [] }),
+  });
+  expect(result).toMatchObject({ ok: false, message: "images is required" });
+});
+
+function readyState(app: string, schema: SchemaNode, required: readonly string[]): RunnerState {
+  const example = exampleFromSchema(schema);
+  return {
+    ...runner,
+    app,
+    schemaPhase: "ready",
+    schemaJson: JSON.stringify(schema),
+    requiredKeys: required,
+    payloadText: JSON.stringify(example, null, 2),
+    prefilled: true,
+  };
+}
 
 it("posts a job and treats a 409 as the same job", () => {
   const built = jobBody(runner);
@@ -97,11 +283,33 @@ it("rejects a payload that is not an object", () => {
   expect(result.ok).toBe(false);
 });
 
+const keys = { actorId: "", label: "", pendingKeyId: "", copied: false, dismissed: false, copyError: "" };
+
 it("asks before revoking a key", () => {
-  const asked = step(KeyTable.spec, { actorId: "", label: "", pendingKeyId: "" }, { _tag: "Ask", keyId: "key_1" });
+  const asked = step(KeyTable.spec, keys, { _tag: "Ask", keyId: "key_1" });
   const confirmed = step(KeyTable.spec, asked.state, { _tag: "Confirm" });
   expect(outputsIn(confirmed.commands)).toEqual([{ _tag: "RevokeKey", keyId: "key_1" }]);
   expect(confirmed.state.pendingKeyId).toBe("");
+});
+
+it("shows an issued key in one field and removes it when closed", () => {
+  const issued = { token: "lpk_test", actorId: "ada" };
+  const props = { keys: [], error: "", issued };
+  const html = renderToString(viewOf(KeyTable, keys, { props }), { dev: false });
+  expect(html).toContain('class="once-row"');
+  expect(html).toContain('class="secret"');
+  expect(html).toContain('value="lpk_test"');
+  expect(html).toContain(">Copy<");
+  expect(html).toContain(">Close<");
+  expect(html).not.toContain("<code>lpk_test</code>");
+
+  const copied = step(KeyTable.spec, keys, { _tag: "Copy", token: "lpk_test" });
+  expect(inputsFor(copied.commands, { name: "clipboard" })).toEqual(["lpk_test"]);
+
+  const dismissed = step(KeyTable.spec, keys, { _tag: "Dismiss" });
+  expect(outputsIn(dismissed.commands, KeyTable)).toEqual([{ _tag: "DismissKey" }]);
+  const hidden = renderToString(viewOf(KeyTable, dismissed.state, { props }), { dev: false });
+  expect(hidden).not.toContain("lpk_test");
 });
 
 it("emits a cost range from the inputs", () => {
@@ -149,8 +357,40 @@ it("emits a cost range from the inputs", () => {
   expect(html).toContain("bar wide");
 });
 
+it("shows each job in columns with the operation ref on the next row", () => {
+  const html = renderToString(
+    viewOf(
+      JobList,
+      { selectedId: "" },
+      {
+        props: {
+          jobs: [
+            {
+              id: "job-1",
+              app: "comfy-stream/fal-benini-z-edit",
+              state: "uncertain",
+              created_at: "2026-10-14T22:41:00.000Z",
+              operation_ref: "probe-2c962d89-162d-41e1-9aeb-c880c3e131f7",
+            },
+          ],
+          error: "",
+          selectedId: "job-1",
+        },
+      },
+    ),
+    { dev: false },
+  );
+  expect(html).toContain(">App<");
+  expect(html).toContain(">State<");
+  expect(html).toContain(">Created<");
+  expect(html).toContain("Operation ref");
+  expect(html).toContain('colspan="3"');
+  expect(html).toContain("probe-2c962d89-162d-41e1-9aeb-c880c3e131f7");
+  expect(html).toContain('data-selected="true"');
+});
+
 it("names the retry action and opens the finished job", () => {
-  const html = renderToString(viewOf(JobRunner, runner, { props: { offerings: [] } }), { dev: false });
+  const html = renderToString(viewOf(JobRunner, runner, { props: { offerings: [], remembered: null } }), { dev: false });
   expect(html).toContain("Retry last job");
   const viewed = step(JobRunner.spec, { ...runner, jobId: "job-1" }, { _tag: "View" });
   expect(outputsIn(viewed.commands)).toEqual([

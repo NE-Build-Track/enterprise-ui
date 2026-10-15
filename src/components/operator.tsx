@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { flushSync } from "react-dom";
 
 import { GyralElement } from "@/components/GyralElement";
 import { api } from "@/lib/client-api";
@@ -41,6 +42,30 @@ export function OperatorDesk() {
     return () => clearTimeout(first);
   }, [refresh]);
 
+  const dismissIssued = useCallback(() => {
+    setIssued(null);
+  }, []);
+
+  useEffect(() => {
+    const drop = () => {
+      flushSync(dismissIssued);
+      const field = document.querySelector("lp-key-table")?.shadowRoot?.querySelector("#issued-key");
+      if (field instanceof HTMLInputElement) {
+        field.value = "";
+        field.remove();
+      }
+    };
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) drop();
+    };
+    window.addEventListener("pagehide", drop);
+    window.addEventListener("pageshow", onPageShow);
+    return () => {
+      window.removeEventListener("pagehide", drop);
+      window.removeEventListener("pageshow", onPageShow);
+    };
+  }, [dismissIssued]);
+
   const onKeys = useCallback(
     (detail: unknown) => {
       if (!isRecord(detail)) return;
@@ -49,6 +74,7 @@ export function OperatorDesk() {
         const label = typeof detail.label === "string" ? detail.label : "";
         void api("/api/operator/keys", {
           method: "POST",
+          cache: "no-store",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ actorId, label }),
         }).then(async (result) => {
@@ -61,6 +87,9 @@ export function OperatorDesk() {
           await refresh();
         });
       }
+      if (detail._tag === "DismissKey") {
+        dismissIssued();
+      }
       if (detail._tag === "RevokeKey" && typeof detail.keyId === "string") {
         void api(`/api/operator/keys/${detail.keyId}/revoke`, { method: "POST" }).then(async (result) => {
           if (!result.ok && result.status !== 204) {
@@ -71,7 +100,7 @@ export function OperatorDesk() {
         });
       }
     },
-    [refresh],
+    [dismissIssued, refresh],
   );
 
   const onActors = useCallback((detail: unknown) => {

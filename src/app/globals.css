@@ -538,6 +538,29 @@
     align-items: end;
   }
 
+  .once-row {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 0.5rem;
+    max-inline-size: 100%;
+    overflow-x: auto;
+  }
+
+  .once-row button {
+    flex: none;
+    white-space: nowrap;
+  }
+
+  input.secret {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    font-family: ui-monospace, "IBM Plex Mono", monospace;
+    white-space: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
   .note,
   [role="status"] {
     color: var(--text-muted);
