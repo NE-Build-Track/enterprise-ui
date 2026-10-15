@@ -21,6 +21,11 @@ it("prefills image and video inputs from the app name", () => {
   expect(JSON.parse(examplePayload("blueclaw/chat/qwen3.8-27b", ["single-shot"]))).toHaveProperty("messages");
 });
 
+it("does not guess a body for a registered ffmpeg tool", () => {
+  expect(examplePayload("comfystream/ffmpeg-compose", ["single-shot"])).toBe("");
+  expect(examplePayload("comfystream/ffmpeg-images-to-video", ["single-shot"])).toBe("");
+});
+
 it("leaves persistent apps empty", () => {
   expect(examplePayload("comfystream", ["persistent"])).toBe("");
   expect(examplePayload("comfystream/flux-klein", ["persistent"])).toBe("");

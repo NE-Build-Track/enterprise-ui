@@ -302,9 +302,11 @@ function jsonPanel(state: RunnerState, intent: string) {
       <textarea data-intent=${intent} spellcheck="false">${state.payloadText}</textarea>
     </label>
     ${
-      state.prefilled
+      state.schemaPhase === "absent" && state.prefilled
         ? html`<p>Example inputs for this single-shot app. Replace placeholder URLs before you run it.</p>`
-        : ""
+        : state.schemaPhase === "ready"
+          ? html`<p>This JSON is the request generated from the capability schema.</p>`
+          : ""
     }`;
 }
 

@@ -34,7 +34,7 @@ export async function loadCapabilityForm(call: EngineCall, app: string): Promise
 
 export async function loadCapabilityFormFrom(app: string, sources: Sources): Promise<CapabilityForm> {
   const urls = await sources.discoveryUrls(app);
-  if (urls.length === 0) return { ok: false, status: 404, error: "no request schema" };
+  if (urls.length === 0) return { ok: false, status: 502, error: "discovery could not be read" };
   let sawDiscovery = false;
   let registration: Registration | null = null;
   for (const url of urls) {

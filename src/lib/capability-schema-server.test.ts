@@ -64,4 +64,10 @@ it("uses the name heuristic only when discovery has no schema for the app", asyn
     readSchema: () => Promise.reject(new Error("should not fetch")),
   });
   expect(unread).toMatchObject({ ok: false, status: 502 });
+  const nowhere = await loadCapabilityFormFrom("comfystream/ffmpeg-compose", {
+    discoveryUrls: () => Promise.resolve([]),
+    readDiscovery: () => Promise.reject(new Error("should not fetch")),
+    readSchema: () => Promise.reject(new Error("should not fetch")),
+  });
+  expect(nowhere).toMatchObject({ ok: false, status: 502, error: "discovery could not be read" });
 });

@@ -9,10 +9,13 @@ type Json = Record<string, unknown>;
 export function examplePayload(app: string, modes: readonly string[]): string {
   if (!modes.includes("single-shot")) return "";
   const body = bodyFor(app.toLowerCase());
+  if (!body) return "";
   return JSON.stringify(body, null, 2);
 }
 
-function bodyFor(app: string): Json {
+function bodyFor(app: string): Json | null {
+  // Ffmpeg tools register a request schema. A guessed body is a different tool's contract.
+  if (app.includes("/ffmpeg-")) return null;
   if (app.includes("/chat/") || app.endsWith("/chat")) {
     return { messages: [{ role: "user", content: "Say hello in one sentence." }] };
   }
