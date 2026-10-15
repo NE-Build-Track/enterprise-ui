@@ -15,6 +15,7 @@ npm run dev
 | Variable | Purpose |
 | --- | --- |
 | `LPB_ENGINE_URL` | Public engine origin |
+| `LPB_DISCOVERY_URL` | Orchestrator `GET /discovery`. Request forms come from each runner's `schema_url`, not `/v1/offerings` |
 | `LPB_ADMIN_TOKEN` | Engine admin key. Server only |
 | `LPB_APPLICATION_ID` | Application id, default `default` |
 | `SESSION_SECRET` | Encrypts the session cookie |
@@ -46,6 +47,16 @@ npx create-next-app@latest my-app --example https://github.com/OWNER/enterprise-
 ```
 
 `npm create` uses `create-next-app --example` when it is not running inside this checkout. Set `LIVEPEER_ENTERPRISE_EXAMPLE` to a GitHub URL or a local directory.
+
+## Deploy
+
+Production is the `enterprise-ui` service in the Railway project `gateway-ui`. This repository deploys that service. [gateway-integration-lab](https://github.com/NE-Build-Track/gateway-integration-lab) does not.
+
+[`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) runs on every push to `main` and from Actions → Deploy → Run workflow. The job uploads this directory with `railway up --service enterprise-ui --ci` and fails when the build fails.
+
+`RAILWAY_TOKEN` is a Railway project token for the `production` environment of project `gateway-ui`. A project token is already bound to that environment, so the workflow does not pass `--project` or `--environment`. Create the token under the gateway-ui project settings → Tokens, then store it as `RAILWAY_TOKEN` in this repository's Actions secrets. Fork pull requests cannot read the secret.
+
+The service reads `LPB_DISCOVERY_URL` at runtime. Without it, a selected offering falls through to an empty request instead of that capability's schema.
 
 ## Checks
 
