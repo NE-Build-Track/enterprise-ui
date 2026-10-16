@@ -115,10 +115,18 @@ export async function jobCost(call: EngineCall, jobId: string): Promise<JobCost>
   return unwrap(result);
 }
 
-export async function jobResult(call: EngineCall, jobId: string): Promise<RawEngineBody> {
+export type StoredEngineBody = {
+  readonly status: number;
+  readonly contentType: string;
+  readonly bytes: Uint8Array;
+  readonly jobId: string | null;
+};
+
+export async function jobResult(call: EngineCall, jobId: string): Promise<StoredEngineBody> {
   const response = await engineFetch(call, `/v1/jobs/${jobId}/result`);
-  const text = await response.text();
+  const bytes = new Uint8Array(await response.arrayBuffer());
   if (!response.ok) {
+    const text = new TextDecoder().decode(bytes);
     let parsed: unknown = text;
     try {
       parsed = text ? JSON.parse(text) : text;
@@ -130,7 +138,7 @@ export async function jobResult(call: EngineCall, jobId: string): Promise<RawEng
   return {
     status: response.status,
     contentType: response.headers.get("content-type") ?? "application/octet-stream",
-    body: text,
+    bytes,
     jobId: response.headers.get("livepeer-job-id"),
   };
 }

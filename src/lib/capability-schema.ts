@@ -285,36 +285,49 @@ function nodeFields(schema: SchemaNode, value: unknown, path: readonly string[],
   return [{ kind, path: path.join("."), label, value: value == null ? "" : String(value), title }];
 }
 
+function pathName(path: readonly string[]): string {
+  return path.join(".") || "This value";
+}
+
+function mismatchChoice(options: readonly string[], value: unknown, path: readonly string[]): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== "string" || !options.includes(value)) return `${pathName(path)} is not one of the field choices.`;
+  return null;
+}
+
+function mismatchList(schema: SchemaNode, value: unknown, path: readonly string[]): string | null {
+  if (value === undefined || value === null) return null;
+  if (!Array.isArray(value)) return `${pathName(path)} is not a list, so Fields cannot show it.`;
+  for (let index = 0; index < value.length; index += 1) {
+    const found = mismatchNode(schema.items ?? {}, value[index], [...path, String(index)]);
+    if (found) return found;
+  }
+  return null;
+}
+
+function mismatchGroup(schema: SchemaNode, value: unknown, path: readonly string[]): string | null {
+  if (value === undefined || value === null) return null;
+  if (!isRecord(value)) return `${pathName(path)} is not a group of fields.`;
+  for (const [key, child] of Object.entries(schema.properties ?? {})) {
+    if (!Object.hasOwn(value, key)) continue;
+    const found = mismatchNode(child, value[key], [...path, key]);
+    if (found) return found;
+  }
+  return null;
+}
+
+function mismatchScalar(value: unknown, path: readonly string[]): string | null {
+  if (value === undefined || value === null || typeof value !== "object") return null;
+  return `${pathName(path)} has a nested value Fields cannot edit.`;
+}
+
 function mismatchNode(schema: SchemaNode, value: unknown, path: readonly string[]): string | null {
   const branch = displayedBranch(schema, value);
   const options = stringEnum(branch);
-  const name = path.join(".") || "This value";
-  if (options.length > 0) {
-    if (value === undefined || value === null) return null;
-    if (typeof value !== "string" || !options.includes(value)) return `${name} is not one of the field choices.`;
-    return null;
-  }
-  if (branch.items || branch.type === "array") {
-    if (value === undefined || value === null) return null;
-    if (!Array.isArray(value)) return `${name} is not a list, so Fields cannot show it.`;
-    for (let index = 0; index < value.length; index += 1) {
-      const found = mismatchNode(branch.items ?? {}, value[index], [...path, String(index)]);
-      if (found) return found;
-    }
-    return null;
-  }
-  if (branch.properties || branch.type === "object") {
-    if (value === undefined || value === null) return null;
-    if (!isRecord(value)) return `${name} is not a group of fields.`;
-    for (const [key, child] of Object.entries(branch.properties ?? {})) {
-      if (!Object.hasOwn(value, key)) continue;
-      const found = mismatchNode(child, value[key], [...path, key]);
-      if (found) return found;
-    }
-    return null;
-  }
-  if (value === undefined || value === null || typeof value !== "object") return null;
-  return `${name} has a nested value Fields cannot edit.`;
+  if (options.length > 0) return mismatchChoice(options, value, path);
+  if (branch.items || branch.type === "array") return mismatchList(branch, value, path);
+  if (branch.properties || branch.type === "object") return mismatchGroup(branch, value, path);
+  return mismatchScalar(value, path);
 }
 
 function displayedBranch(schema: SchemaNode, value: unknown): SchemaNode {

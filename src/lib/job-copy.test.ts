@@ -2,8 +2,8 @@ import { expect, it } from "vitest";
 
 import { fieldsMismatch } from "./capability-schema";
 import type { CostSummary, Job, JobCost } from "./engine/types";
-import { failureCopy, formatJobCost, jobStateLabel, offeringCopy, periodSpendUsd, reconciliationCopy, readyCopy, tasksMatching } from "./job-copy";
-import { filterJobs, paginate, readJobFilters } from "./job-history";
+import { failureCopy, formatJobCost, jobStateLabel, lastUpdate, offeringCopy, periodSpendUsd, reconciliationCopy, readyCopy, tasksMatching } from "./job-copy";
+import { filterJobs, inWindow, paginate, readJobFilters } from "./job-history";
 
 const job = (patch: Partial<Job>): Job => ({
   id: "job-1",
@@ -22,6 +22,31 @@ const job = (patch: Partial<Job>): Job => ({
   state: "queued",
   usage: null,
   ...patch,
+});
+
+it("uses the latest attempt time when sorting updates", () => {
+  const attempt = {
+    job_id: "job-1",
+    number: 1,
+    runner_url: null,
+    orchestrator_url: null,
+    allocation_id: null,
+    sessions: [],
+    payment_sent: false,
+    outcome: "in_flight" as const,
+    status_code: null,
+    started_at: "2026-10-02T00:00:00.000Z",
+    ended_at: "2026-10-03T00:00:00.000Z",
+  };
+  const updated = job({
+    created_at: "2026-10-01T00:00:00.000Z",
+    attempts: [
+      attempt,
+      { ...attempt, number: 2, started_at: "2026-10-04T00:00:00.000Z", ended_at: null },
+    ],
+  });
+  expect(lastUpdate(updated)).toBe("2026-10-04T00:00:00.000Z");
+  expect(lastUpdate(job({ attempts: [] }))).toBe("2026-10-14T22:41:00.000Z");
 });
 
 it("labels job states without folding uncertain into queued", () => {
@@ -79,6 +104,9 @@ it("shows awaiting cost separately from a known USD fee", () => {
       "USD",
     ).text,
   ).toBe("<$0.01");
+  const unpriced = formatJobCost({ ...pending, status: "observed", fees: { fee_eth: "0.01", fee_usd: null, row_count: 1 } }, "USD");
+  expect(unpriced.text).toBe("No USD price");
+  expect(unpriced.exact).toBe("0.01 ETH");
 });
 
 it("sums period spend without the pending class", () => {
@@ -97,6 +125,13 @@ it("sums period spend without the pending class", () => {
   };
   expect(periodSpendUsd(summary)).toBe("3.5");
   expect(summary.jobs_pending).toBe(3);
+  expect(periodSpendUsd({ ...summary, by_class: { ...summary.by_class, uncertain: { ...fees, fee_usd: null } } })).toBeNull();
+});
+
+it("compares a billing window by instant, not text", () => {
+  const created = job({ created_at: "2026-10-14T00:00:00.100Z" });
+  expect(inWindow(created, "2026-10-14T00:00:00+00:00", "2026-10-14T00:00:00.100Z")).toBe(true);
+  expect(inWindow(created, "2026-10-14T00:00:00.200Z", "2026-10-15T00:00:00Z")).toBe(false);
 });
 
 it("filters, searches, and pages newest first", () => {

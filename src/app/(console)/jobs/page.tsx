@@ -10,7 +10,7 @@ export const metadata: Metadata = {
 
 export default function JobsPage() {
   return (
-    <Suspense fallback={<p role="status">Loading jobs</p>}>
+    <Suspense fallback={<output>Loading jobs</output>}>
       <JobsBoard />
     </Suspense>
   );

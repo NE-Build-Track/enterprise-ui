@@ -263,7 +263,7 @@ it("posts a job and treats a 409 as the same job", () => {
   expect(failed.state.conflict).toBe(true);
   expect(failed.state.countdown).toBe(5);
   expect(outputsIn(failed.commands)).toEqual([
-    { _tag: "JobCompleted", jobId: "job-1", conflict: true, operationRef: "ref-1", request: built.value, result: null },
+    { _tag: "JobCompleted", jobId: "job-1", conflict: true, failed: true, operationRef: "ref-1", request: built.value, result: null },
   ]);
 });
 
@@ -475,7 +475,13 @@ it("shows an observed sub-cent fee in the jobs table", () => {
           mode: "immediate",
           model: null,
           operation_ref: "probe-2c962d89-162d-41e1-9aeb-c880c3e131f7",
-          result: { storage: "inline", url: null },
+          result: {
+            content_type: "application/json",
+            location: null,
+            sha256: "abc123",
+            size_bytes: 2,
+            storage: "inline",
+          },
           state: "succeeded",
           usage: null,
         },
@@ -505,6 +511,7 @@ it("names the estimate and opens the finished job", () => {
       _tag: "JobCompleted",
       jobId: "job-1",
       conflict: false,
+      failed: false,
       operationRef: "ref-1",
       request: built.ok ? built.value : null,
       result: null,
@@ -527,6 +534,7 @@ it("carries the runner result onto the finished job", () => {
       _tag: "JobCompleted",
       jobId: "job-1",
       conflict: false,
+      failed: false,
       operationRef: "ref-1",
       request: built.ok ? built.value : null,
       result: { body: "{\"ok\":true}", contentType: "application/json" },

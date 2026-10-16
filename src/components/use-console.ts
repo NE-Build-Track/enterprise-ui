@@ -4,7 +4,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { isAllowance, isCostSummary, isJob, isJobCost, isOffering, isReconciliation, listOf } from "@/gyral/guards";
 import { api } from "@/lib/client-api";
-import { isRecord } from "@/lib/engine/errors";
 import type { Allowance, CostSummary, Job, JobCost, Offering, Reconciliation } from "@/lib/engine/types";
 import { JOB_LIST_LIMIT } from "@/lib/job-history";
 import { defaultCostWindow } from "@/lib/money";
@@ -27,7 +26,7 @@ function useVisibleInterval(delayMs: number | null, tick: () => void): void {
       clearInterval(timer);
       timer = undefined;
       if (document.visibilityState === "hidden") return;
-      timer = setInterval(() => void tick(), delayMs);
+      timer = setInterval(tick, delayMs);
     };
     arm();
     document.addEventListener("visibilitychange", arm);
@@ -129,12 +128,12 @@ export function costSettled(cost: JobCost | null): boolean {
   return cost !== null && cost.status !== "none" && cost.status !== "pending";
 }
 
-export function useJobCosts(ids: readonly string[]): ReadonlyMap<string, JobCost | null> {
-  const key = ids.join("\n");
+export function useJobCosts(ids: readonly string[], revision: string): ReadonlyMap<string, JobCost | null> {
+  const idKey = ids.join("\n");
   const [costs, setCosts] = useState<ReadonlyMap<string, JobCost | null>>(new Map());
 
   useEffect(() => {
-    const jobIds = key ? key.split("\n") : [];
+    const jobIds = idKey ? idKey.split("\n") : [];
     if (jobIds.length === 0) return;
     let cancelled = false;
     let generation = 0;
@@ -144,8 +143,8 @@ export function useJobCosts(ids: readonly string[]): ReadonlyMap<string, JobCost
       const request = ++generation;
       void Promise.all(
         jobIds.map(async (id) => {
-          const result = await api(`/api/jobs/${id}`);
-          const cost = result.ok && isRecord(result.body) && isJobCost(result.body.cost) ? result.body.cost : null;
+          const result = await api(`/api/jobs/${encodeURIComponent(id)}/cost`);
+          const cost = result.ok && isJobCost(result.body) ? result.body : null;
           return [id, cost] as const;
         }),
       ).then((rows) => {
@@ -169,7 +168,7 @@ export function useJobCosts(ids: readonly string[]): ReadonlyMap<string, JobCost
       clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [key]);
+  }, [idKey, revision]);
 
   return costs;
 }

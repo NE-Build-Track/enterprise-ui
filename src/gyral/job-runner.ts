@@ -31,6 +31,7 @@ export type JobRunnerOutput =
       readonly _tag: "JobCompleted";
       readonly jobId: string | null;
       readonly conflict: boolean;
+      readonly failed: boolean;
       readonly operationRef: string;
       readonly request: JobRequest | null;
       readonly result: { readonly body: string; readonly contentType: string } | null;
@@ -388,15 +389,17 @@ function completed(
   jobId: string | null,
   conflict: boolean,
   result: { readonly body: string; readonly contentType: string } | null = null,
+  failed = false,
 ) {
   const built = jobBody(state);
   return emit({
     _tag: "JobCompleted",
     jobId,
     conflict,
+    failed,
     operationRef: state.operationRef,
     request: built.ok ? built.value : null,
-    result: result && result.body ? result : null,
+    result: result?.body ? result : null,
   });
 }
 
@@ -460,6 +463,22 @@ function blankRunner(): RunnerState {
     offeringChosen: false,
     query: "",
   };
+}
+
+function taskChoices(offerings: readonly Offering[], tasks: readonly Offering[], app: string, intent: string) {
+  if (offerings.length === 0) return html`<p role="status">No tasks are available.</p>`;
+  if (tasks.length === 0) return html`<p role="status">No tasks match this search.</p>`;
+  return tasks.map((offering) => {
+    const task = offeringCopy(offering.app);
+    return html`<label>
+      <input type="radio" name="task" value=${offering.app} ?checked=${app === offering.app} data-intent=${intent} />
+      <span class="task-name">
+        <strong>${task.name}</strong>
+        ${task.description ? html`<span class="muted">${task.description}</span>` : ""}
+        <code title=${offering.app}>${offering.app}</code>
+      </span>
+    </label>`;
+  });
 }
 
 export const JobRunner = define<RunnerState, Msg, Props, JobRunnerOutput>()("lp-job-runner", {
@@ -617,7 +636,7 @@ export const JobRunner = define<RunnerState, Msg, Props, JobRunnerOutput>()("lp-
         countdown: m.retryAfter,
         resultBody: "",
       };
-      const commands = [completed(s, m.jobId, m.conflict)];
+      const commands = [completed(s, m.jobId, m.conflict, null, true)];
       return m.retryAfter && m.retryAfter > 0 ? [next, [...commands, delay(1000, { _tag: "Tick" })]] : [next, commands];
     },
     Tick: (s) => {
@@ -640,23 +659,7 @@ export const JobRunner = define<RunnerState, Msg, Props, JobRunnerOutput>()("lp-
           <input type="search" value=${s.query} data-intent=${i.Query} placeholder="Name or identifier" spellcheck="false" />
         </label>
         <div class="task-list">
-          ${
-            ctx.props.offerings.length === 0
-              ? html`<p role="status">No tasks are available.</p>`
-              : tasks.length === 0
-                ? html`<p role="status">No tasks match this search.</p>`
-                : tasks.map((offering) => {
-                    const task = offeringCopy(offering.app);
-                    return html`<label>
-                      <input type="radio" name="task" value=${offering.app} ?checked=${s.app === offering.app} data-intent=${i.App} />
-                      <span class="task-name">
-                        <strong>${task.name}</strong>
-                        ${task.description ? html`<span class="muted">${task.description}</span>` : ""}
-                        <code title=${offering.app}>${offering.app}</code>
-                      </span>
-                    </label>`;
-                  })
-          }
+          ${taskChoices(ctx.props.offerings, tasks, s.app, i.App)}
         </div>
       </fieldset>
       <form class="job-controls" data-intent=${i.Run}>

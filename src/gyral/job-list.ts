@@ -70,7 +70,8 @@ export const JobList = define<Stateless, never, Props>()("lp-job-list", {
                 ${each(
                   jobs,
                   (job) => job.id,
-                  (job, picked) => Row(job, picked.cost, picked.currency),
+                  (job, picked: { readonly cost: JobCost | null; readonly currency: BillingCurrency }) =>
+                    Row(job, picked.cost, picked.currency),
                   (job) => ({ cost: costs.get(job.id) ?? null, currency: ctx.props.currency }),
                 )}
               </tbody>
