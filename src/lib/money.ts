@@ -49,13 +49,32 @@ export function formatUsdDisplay(amount: string | null | undefined): DisplayAmou
   const fixed = value.toFixed(places);
   const negative = fixed.startsWith("-");
   const [whole, frac = ""] = fixed.replace("-", "").split(".");
-  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  const grouped = groupThousands(whole ?? "");
   return { text: `${negative ? "-" : ""}$${grouped}.${frac}`, exact };
 }
 
+function groupThousands(whole: string): string {
+  const digits = [...whole];
+  const parts: string[] = [];
+  for (let index = 0; index < digits.length; index += 1) {
+    const remaining = digits.length - index;
+    if (index > 0 && remaining % 3 === 0) parts.push(",");
+    parts.push(digits[index] ?? "");
+  }
+  return parts.join("");
+}
+
 function fractionDigits(value: Decimal): number {
-  const text = value.abs().toFixed(8).replace(/0+$/, "");
-  return text.split(".")[1]?.length ?? 0;
+  const text = trimTrailingZeros(value.abs().toFixed(8));
+  const dot = text.indexOf(".");
+  if (dot === -1) return 0;
+  return text.length - dot - 1;
+}
+
+function trimTrailingZeros(text: string): string {
+  let end = text.length;
+  while (end > 0 && text[end - 1] === "0") end -= 1;
+  return text.slice(0, end);
 }
 
 export function sameAmount(left: string | null | undefined, right: string | null | undefined): boolean {

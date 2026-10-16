@@ -1,5 +1,4 @@
 import type { CostClass, Job, JobCost } from "./engine/types";
-import { COST_CLASSES } from "./engine/types";
 
 import { offeringCopy } from "./job-copy";
 
@@ -64,20 +63,15 @@ export function paginate<T>(items: readonly T[], page: number, size = JOB_PAGE_S
 }
 
 export function inWindow(job: Job, start: string, end: string): boolean {
-  return job.created_at >= start && job.created_at <= end;
+  const created = Date.parse(job.created_at);
+  const from = Date.parse(start);
+  const to = Date.parse(end);
+  if (Number.isNaN(created) || Number.isNaN(from) || Number.isNaN(to)) return false;
+  return created >= from && created <= to;
 }
 
 export function jobsForClass(jobs: readonly Job[], costs: ReadonlyMap<string, JobCost | null>, name: CostClass): Job[] {
   return jobs.filter((job) => costs.get(job.id)?.attempts.some((attempt) => attempt.cost_class === name));
-}
-
-export function unattributedJobs(jobs: readonly Job[], costs: ReadonlyMap<string, JobCost | null>): Job[] {
-  return jobs.filter((job) => {
-    if (!costs.has(job.id)) return false;
-    const cost = costs.get(job.id);
-    if (!cost || cost.status === "none") return true;
-    return !cost.attempts.some((attempt) => COST_CLASSES.includes(attempt.cost_class));
-  });
 }
 
 function dayBound(value: string, edge: "start" | "end"): number | null {

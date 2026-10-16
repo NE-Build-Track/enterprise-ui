@@ -5,15 +5,38 @@ const STORAGE_NAME = "lp-job-requests";
 const RESULT_STORAGE = "lp-job-results";
 const RESULT_LIMIT = 100_000;
 
-export type StoredJobResult = { readonly contentType: string; readonly body: string };
+export type StoredJobResult = { readonly contentType: string; readonly body: string; readonly truncated: boolean };
+
+export function subscribeJobResults(onChange: () => void): () => void {
+  if (typeof window === "undefined") return () => {};
+  const notify = () => onChange();
+  window.addEventListener("storage", notify);
+  return () => window.removeEventListener("storage", notify);
+}
 
 export function rememberJobResult(jobId: string, result: StoredJobResult): void {
   const saved = readResults();
   saved[jobId] = {
     contentType: result.contentType,
     body: result.body.slice(0, RESULT_LIMIT),
+    truncated: result.truncated || result.body.length > RESULT_LIMIT,
   };
   writeResults(saved);
+}
+
+let resultCache: { readonly jobId: string; readonly raw: string; readonly value: StoredJobResult | null } | null = null;
+
+export function recallJobResultSnapshot(jobId: string): StoredJobResult | null {
+  let raw = "";
+  try {
+    raw = sessionStorage.getItem(RESULT_STORAGE) ?? "";
+  } catch {
+    raw = "";
+  }
+  if (resultCache && resultCache.jobId === jobId && resultCache.raw === raw) return resultCache.value;
+  const value = recallJobResult(jobId);
+  resultCache = { jobId, raw, value };
+  return value;
 }
 
 export function recallJobResult(jobId: string): StoredJobResult | null {
@@ -22,6 +45,7 @@ export function recallJobResult(jobId: string): StoredJobResult | null {
   return {
     contentType: typeof result.contentType === "string" ? result.contentType : "",
     body: result.body,
+    truncated: result.truncated === true,
   };
 }
 

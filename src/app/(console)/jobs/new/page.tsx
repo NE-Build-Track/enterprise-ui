@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   description: "Choose a task, configure inputs, and run a job.",
 };
 
-type Props = { searchParams: Promise<{ app?: string; again?: string }> };
+type Props = { readonly searchParams: Promise<{ readonly app?: string; readonly again?: string }> };
 
 export default async function NewJobPage({ searchParams }: Props) {
   await requirePageSession();

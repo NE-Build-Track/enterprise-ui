@@ -23,6 +23,12 @@ function isReserved(value: unknown): value is ReservedProbe {
   return isRecord(value) && typeof value.route === "string" && typeof value.status === "number";
 }
 
+function healthStatus(health: EngineHealth | null, healthError: string): string {
+  if (!health) return healthError || "Checking the engine.";
+  const freshness = health.discovery_fresh ? "fresh" : "stale";
+  return `${health.version}. Discovery ${freshness}.`;
+}
+
 export function Iss04({ role, actorId }: { readonly role: SessionRole; readonly actorId: string | null }) {
   const [health, setHealth] = useState<EngineHealth | null>(null);
   const [healthError, setHealthError] = useState("");
@@ -98,11 +104,7 @@ export function Iss04({ role, actorId }: { readonly role: SessionRole; readonly 
   return (
     <article className="panel">
       <h1>Checks</h1>
-      <p role="status">
-        {health
-          ? `${health.version}. Discovery ${health.discovery_fresh ? "fresh" : "stale"}.`
-          : healthError || "Checking the engine."}
-      </p>
+      <output>{healthStatus(health, healthError)}</output>
       <GyralElement
         tag="lp-blocker-checklist"
         load={loadBlockerChecklist}

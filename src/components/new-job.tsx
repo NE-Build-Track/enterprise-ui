@@ -76,11 +76,13 @@ export function NewJob({ app, again }: { readonly app: string; readonly again: b
       }
       if (detail._tag === "AppSelected" && typeof detail.app === "string") setSelected(detail.app);
       if (detail._tag === "JobCompleted" && typeof detail.jobId === "string") {
-        if (isJobRequest(detail.request)) rememberJobRequest(detail.jobId, detail.request);
+        if (detail.failed === true) return;
+        if (detail.conflict !== true && isJobRequest(detail.request)) rememberJobRequest(detail.jobId, detail.request);
         if (isRecord(detail.result) && typeof detail.result.body === "string" && detail.result.body !== "") {
           rememberJobResult(detail.jobId, {
             body: detail.result.body,
             contentType: typeof detail.result.contentType === "string" ? detail.result.contentType : "",
+            truncated: false,
           });
         }
         router.push(`/jobs/${detail.jobId}`);
@@ -96,7 +98,7 @@ export function NewJob({ app, again }: { readonly app: string; readonly again: b
         <p>Choose a task, fill in the inputs, then check the summary and run.</p>
       </hgroup>
       {again ? (
-        <p role="status">The original input is not kept on the job. Running here starts a new job and can incur a new charge.</p>
+        <output>The original input is not kept on the job. Running here starts a new job and can incur a new charge.</output>
       ) : null}
       <article className="panel composer">
         <GyralElement tag="lp-job-runner" load={loadJobRunner} label="New job" props={{ offerings, remembered }} onOutput={onRunner} />

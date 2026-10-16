@@ -2,7 +2,7 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, expect, it } from "vitest";
 
-import { provisionActor, readyz, reservedProbes, runJob } from "./api";
+import { jobResult, provisionActor, readyz, reservedProbes, runJob } from "./api";
 import { createEngineCall } from "./client";
 import { EngineRequestError } from "./errors";
 
@@ -56,6 +56,22 @@ it("keeps the runner body and the job id header", async () => {
     timeout_s: 30,
   });
   expect(run).toMatchObject({ status: 200, body: "not json", jobId: "job-9", contentType: "text/plain" });
+});
+
+it("returns stored result bytes without decoding them as text", async () => {
+  const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0xff, 0xfe]);
+  server.use(
+    http.get("http://engine.test/v1/jobs/:id/result", () =>
+      new HttpResponse(png, {
+        status: 200,
+        headers: { "content-type": "image/png", "livepeer-job-id": "job-1" },
+      }),
+    ),
+  );
+  const result = await jobResult(call(), "job-1");
+  expect(result.bytes).toEqual(png);
+  expect(result.contentType).toBe("image/png");
+  expect(result.jobId).toBe("job-1");
 });
 
 it("provisions an actor allocation in USD", async () => {

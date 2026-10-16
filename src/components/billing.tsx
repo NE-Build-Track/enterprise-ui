@@ -8,7 +8,7 @@ import { loadAllowanceMeter, loadCostBreakdown, loadReconciliationCard } from "@
 import { isRecord } from "@/lib/engine/errors";
 import { COST_CLASSES, type CostClass } from "@/lib/engine/types";
 import { formatWindow, jobTitle, periodSpendUsd } from "@/lib/job-copy";
-import { inWindow, jobsForClass, unattributedJobs } from "@/lib/job-history";
+import { inWindow, JOB_LIST_LIMIT, jobsForClass } from "@/lib/job-history";
 import { feePositive, formatDisplayMoney, formatUsdDisplay } from "@/lib/money";
 
 import { useConsoleData, useJobCosts } from "./use-console";
@@ -28,13 +28,16 @@ export function Billing() {
   const period = data.summary ? formatWindow(data.summary.start, data.summary.end) : formatWindow(data.start, data.end);
   const windowJobs = useMemo(() => {
     const matched = data.jobs.filter((job) => inWindow(job, data.start, data.end));
-    return [...matched].sort((left, right) => right.created_at.localeCompare(left.created_at)).slice(0, 25);
+    return [...matched].sort((left, right) => right.created_at.localeCompare(left.created_at));
   }, [data.end, data.jobs, data.start]);
-  const costs = useJobCosts(windowJobs.map((job) => job.id));
+  const costRevision = windowJobs.map((job) => `${job.id}\t${job.state}\t${job.completed_at ?? ""}`).join("\n");
+  const costs = useJobCosts(
+    windowJobs.map((job) => job.id),
+    costRevision,
+  );
   const loadedCount = windowJobs.filter((job) => costs.has(job.id)).length;
-  const windowCount = data.jobs.filter((job) => inWindow(job, data.start, data.end)).length;
   const costsReady = windowJobs.length === 0 || loadedCount === windowJobs.length;
-  const outside = windowCount > windowJobs.length;
+  const outside = data.jobs.length >= JOB_LIST_LIMIT;
 
   const onRange = (detail: unknown) => {
     if (!isRecord(detail) || detail._tag !== "RangeChanged") return;
@@ -112,7 +115,7 @@ export function Billing() {
                 <td title={formatUsdDisplay(data.reconciliation?.unattributed.fee_usd).exact}>
                   {formatUsdDisplay(data.reconciliation?.unattributed.fee_usd).text}
                 </td>
-                <td>{jobLinks(unattributedJobs(windowJobs, costs), outside, costsReady)}</td>
+                <td>Not tied to a loaded job</td>
               </tr>
             </tbody>
           </table>

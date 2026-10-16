@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { GyralElement } from "@/components/GyralElement";
 import { isAllowance, isJob, isJobCost } from "@/gyral/guards";
@@ -11,7 +11,7 @@ import { api } from "@/lib/client-api";
 import { isRecord } from "@/lib/engine/errors";
 import type { Job, JobCost, JobRequest } from "@/lib/engine/types";
 import { billingCurrency, type BillingCurrency } from "@/lib/job-copy";
-import { recallJobRequest, recallJobResult, rememberJobRequest, rememberJobResult, type StoredJobResult } from "@/lib/job-request-memory";
+import { recallJobRequest, recallJobResultSnapshot, rememberJobRequest, rememberJobResult, subscribeJobResults, type StoredJobResult } from "@/lib/job-request-memory";
 
 export function JobDetail({ id }: { readonly id: string }) {
   const router = useRouter();
@@ -22,33 +22,48 @@ export function JobDetail({ id }: { readonly id: string }) {
   const [repeating, setRepeating] = useState(false);
   const [currency, setCurrency] = useState<BillingCurrency>("USD");
   const repeatingRef = useRef(false);
+  const pageActive = useRef(true);
 
-  const load = useCallback(async () => {
-    const result = await api(`/api/jobs/${id}`);
-    if (!result.ok || !isRecord(result.body) || !isJob(result.body.job)) {
+  const load = useCallback(async (requested: string, isCurrent: () => boolean) => {
+    const result = await api(`/api/jobs/${encodeURIComponent(requested)}`);
+    if (!isCurrent()) return;
+    if (!result.ok || !isRecord(result.body) || !isJob(result.body.job) || result.body.job.id !== requested) {
+      setJob(null);
+      setCost(null);
       setError(result.ok ? "This job could not be loaded." : result.error);
       return;
     }
     setJob(result.body.job);
     setCost(isJobCost(result.body.cost) ? result.body.cost : null);
     setError("");
-  }, [id]);
+  }, []);
 
   useEffect(() => {
-    const first = setTimeout(() => void load(), 0);
+    let active = true;
+    pageActive.current = true;
+    const first = setTimeout(() => void load(id, () => active), 0);
     void api("/api/allowance").then((result) => {
+      if (!active) return;
       if (result.ok && isAllowance(result.body)) {
         setCurrency(billingCurrency(result.body.available, result.body.spent, result.body.granted));
       }
     });
-    return () => clearTimeout(first);
-  }, [load]);
+    return () => {
+      active = false;
+      pageActive.current = false;
+      clearTimeout(first);
+    };
+  }, [id, load]);
 
   useEffect(() => {
-    if (!job || (job.state !== "running" && job.state !== "queued")) return;
-    const timer = setInterval(() => void load(), 3_000);
-    return () => clearInterval(timer);
-  }, [job, load]);
+    if (!job || job.id !== id || (job.state !== "running" && job.state !== "queued")) return;
+    let active = true;
+    const timer = setInterval(() => void load(id, () => active), 3_000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [id, job, load]);
 
   const repeat = useCallback(
     async (current: Job) => {
@@ -104,13 +119,13 @@ export function JobDetail({ id }: { readonly id: string }) {
           return;
         }
         setUsageError("");
-        await load();
+        await load(id, () => pageActive.current);
       });
     },
-    [job, load, repeat],
+    [id, job, load, repeat],
   );
 
-  const printed = recallJobResult(id);
+  const printed = useSyncExternalStore(subscribeJobResults, () => recallJobResultSnapshot(id), () => null);
   const storedFile = job?.result?.storage === "stored";
   const showResult = printed !== null || job?.state === "succeeded" || storedFile;
 
@@ -137,6 +152,7 @@ export function JobDetail({ id }: { readonly id: string }) {
                 Output
                 {printed.contentType ? <span className="muted">{printed.contentType}</span> : null}
                 <textarea className="result-field" readOnly spellCheck={false} value={formatResult(printed.body)} />
+                {printed.truncated ? <span className="muted">Shortened to fit in this browser.</span> : null}
               </label>
             ) : (
               <p>This browser does not have the result from when the job ran.</p>
@@ -168,6 +184,7 @@ function carriedResult(body: unknown): StoredJobResult | null {
   return {
     body: body.body,
     contentType: typeof body.contentType === "string" ? body.contentType : "",
+    truncated: false,
   };
 }
 
