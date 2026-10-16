@@ -13,5 +13,5 @@ type Props = { readonly params: Promise<{ readonly id: string }> };
 export default async function JobPage({ params }: Props) {
   await requirePageSession();
   const { id } = await params;
-  return <JobDetail id={id} />;
+  return <JobDetail key={id} id={id} />;
 }

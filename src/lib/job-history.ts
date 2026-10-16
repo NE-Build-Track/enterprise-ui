@@ -4,6 +4,7 @@ import { offeringCopy } from "./job-copy";
 
 export const JOB_PAGE_SIZE = 25;
 export const JOB_LIST_LIMIT = 500;
+export const BILLING_COST_LIMIT = 25;
 
 const STATES = new Set<Job["state"]>(["queued", "running", "succeeded", "failed", "uncertain"]);
 
@@ -68,6 +69,13 @@ export function inWindow(job: Job, start: string, end: string): boolean {
   const to = Date.parse(end);
   if (Number.isNaN(created) || Number.isNaN(from) || Number.isNaN(to)) return false;
   return created >= from && created <= to;
+}
+
+export function billingCostJobs<T>(jobs: readonly T[]): { readonly jobs: readonly T[]; readonly truncated: boolean } {
+  return {
+    jobs: jobs.slice(0, BILLING_COST_LIMIT),
+    truncated: jobs.length > BILLING_COST_LIMIT,
+  };
 }
 
 export function jobsForClass(jobs: readonly Job[], costs: ReadonlyMap<string, JobCost | null>, name: CostClass): Job[] {

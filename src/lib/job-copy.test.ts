@@ -3,7 +3,7 @@ import { expect, it } from "vitest";
 import { fieldsMismatch } from "./capability-schema";
 import type { CostSummary, Job, JobCost } from "./engine/types";
 import { failureCopy, formatJobCost, jobStateLabel, lastUpdate, offeringCopy, periodSpendUsd, reconciliationCopy, readyCopy, tasksMatching } from "./job-copy";
-import { filterJobs, inWindow, paginate, readJobFilters } from "./job-history";
+import { billingCostJobs, filterJobs, inWindow, paginate, readJobFilters } from "./job-history";
 
 const job = (patch: Partial<Job>): Job => ({
   id: "job-1",
@@ -132,6 +132,15 @@ it("compares a billing window by instant, not text", () => {
   const created = job({ created_at: "2026-10-14T00:00:00.100Z" });
   expect(inWindow(created, "2026-10-14T00:00:00+00:00", "2026-10-14T00:00:00.100Z")).toBe(true);
   expect(inWindow(created, "2026-10-14T00:00:00.200Z", "2026-10-15T00:00:00Z")).toBe(false);
+});
+
+it("prices at most 25 in-window jobs and marks omitted jobs", () => {
+  const windowJobs = Array.from({ length: 26 }, (_, index) => job({ id: `job-${index}` }));
+  const priced = billingCostJobs(windowJobs);
+
+  expect(priced.jobs).toHaveLength(25);
+  expect(priced.truncated).toBe(true);
+  expect(billingCostJobs(windowJobs.slice(0, 25)).truncated).toBe(false);
 });
 
 it("filters, searches, and pages newest first", () => {

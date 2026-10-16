@@ -115,6 +115,13 @@ export async function jobCost(call: EngineCall, jobId: string): Promise<JobCost>
   return unwrap(result);
 }
 
+export async function recentJobCosts(call: EngineCall, limit = 25): Promise<JobCost[]> {
+  const result = await call.client.GET("/v1/costs/projections", {
+    params: { query: { limit } },
+  });
+  return unwrap(result);
+}
+
 export type StoredEngineBody = {
   readonly status: number;
   readonly contentType: string;
@@ -405,6 +412,7 @@ export const engineHandlers = {
   "GET /v1/jobs/{job_id}/cost": jobCost,
   "GET /v1/jobs/{job_id}/result": jobResult,
   "POST /v1/jobs/{job_id}/usage": reportUsage,
+  "GET /v1/costs/projections": recentJobCosts,
   "GET /v1/costs/summary": costSummary,
   "GET /v1/allowance": allowance,
   "GET /v1/admin/keys": listKeys,

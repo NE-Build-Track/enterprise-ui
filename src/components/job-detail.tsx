@@ -11,6 +11,7 @@ import { api } from "@/lib/client-api";
 import { isRecord } from "@/lib/engine/errors";
 import type { Job, JobCost, JobRequest } from "@/lib/engine/types";
 import { billingCurrency, type BillingCurrency } from "@/lib/job-copy";
+import { jobAfterLoad, jobFromUsage } from "@/lib/job-load";
 import { recallJobRequest, recallJobResultSnapshot, rememberJobRequest, rememberJobResult, subscribeJobResults, type StoredJobResult } from "@/lib/job-request-memory";
 
 export function JobDetail({ id }: { readonly id: string }) {
@@ -22,49 +23,39 @@ export function JobDetail({ id }: { readonly id: string }) {
   const [repeating, setRepeating] = useState(false);
   const [currency, setCurrency] = useState<BillingCurrency>("USD");
   const repeatingRef = useRef(false);
-  const pageActive = useRef(true);
+  const generation = useRef(0);
 
-  const load = useCallback(async (requested: string, isCurrent: () => boolean) => {
+  const load = useCallback(async (requested: string, isCurrent: () => boolean, initial: boolean) => {
     const result = await api(`/api/jobs/${encodeURIComponent(requested)}`);
     if (!isCurrent()) return;
-    if (!result.ok || !isRecord(result.body) || !isJob(result.body.job) || result.body.job.id !== requested) {
-      setJob(null);
-      setCost(null);
+    const loaded = result.ok && isRecord(result.body) && isJob(result.body.job) ? result.body.job : null;
+    setJob((current) => jobAfterLoad(current, requested, loaded, initial));
+    if (loaded?.id !== requested) {
+      if (initial) setCost(null);
       setError(result.ok ? "This job could not be loaded." : result.error);
       return;
     }
-    setJob(result.body.job);
-    setCost(isJobCost(result.body.cost) ? result.body.cost : null);
+    setCost(isRecord(result.body) && isJobCost(result.body.cost) ? result.body.cost : null);
     setError("");
   }, []);
 
   useEffect(() => {
+    const ticket = generation.current + 1;
+    generation.current = ticket;
     let active = true;
-    pageActive.current = true;
-    const first = setTimeout(() => void load(id, () => active), 0);
+    const isCurrent = () => active && generation.current === ticket;
+    const first = setTimeout(() => void load(id, isCurrent, true), 0);
     void api("/api/allowance").then((result) => {
-      if (!active) return;
+      if (!isCurrent()) return;
       if (result.ok && isAllowance(result.body)) {
         setCurrency(billingCurrency(result.body.available, result.body.spent, result.body.granted));
       }
     });
     return () => {
       active = false;
-      pageActive.current = false;
       clearTimeout(first);
     };
   }, [id, load]);
-
-  useEffect(() => {
-    if (job?.id !== id) return;
-    if (job.state !== "running" && job.state !== "queued") return;
-    let active = true;
-    const timer = setInterval(() => void load(id, () => active), 3_000);
-    return () => {
-      active = false;
-      clearInterval(timer);
-    };
-  }, [id, job, load]);
 
   const repeat = useCallback(
     async (current: Job) => {
@@ -110,20 +101,25 @@ export function JobDetail({ id }: { readonly id: string }) {
       for (const [key, value] of Object.entries(detail.quantities)) {
         if (typeof value === "number") quantities[key] = value;
       }
-      void api(`/api/jobs/${job.id}/usage`, {
+      const ticket = generation.current;
+      const requested = job.id;
+      void api(`/api/jobs/${requested}/usage`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ quantities }),
       }).then(async (result) => {
+        if (generation.current !== ticket) return;
         if (!result.ok) {
           setUsageError(result.error);
           return;
         }
         setUsageError("");
-        await load(id, () => pageActive.current);
+        const updated = jobFromUsage(result.body, requested);
+        if (updated) setJob(updated);
+        await load(requested, () => generation.current === ticket, false);
       });
     },
-    [id, job, load, repeat],
+    [job, load, repeat],
   );
 
   const printed = useSyncExternalStore(subscribeJobResults, () => recallJobResultSnapshot(id), () => null);
