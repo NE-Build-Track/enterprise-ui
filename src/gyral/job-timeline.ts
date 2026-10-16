@@ -59,8 +59,8 @@ const TechnicalRow = (attempt: Attempt): TemplateResult => html`
   <tr>
     <td>${attempt.number}</td>
     <td>${attempt.runner_url ?? ""}</td>
-    <td>${attempt.manifest_id ?? ""}</td>
-    <td>${attempt.auth_ids.join(", ")}</td>
+    <td>${attempt.sessions.map((session) => session.manifest_id).join(", ")}</td>
+    <td>${attempt.sessions.map((session) => session.payment_session_id ?? session.match).join(", ")}</td>
   </tr>
 `;
 

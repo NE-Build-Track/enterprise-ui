@@ -465,8 +465,8 @@ export interface components {
          * @description One runner call. Written as ``in_flight`` before the call, updated after it.
          */
         Attempt: {
-            /** Auth Ids */
-            auth_ids: string[];
+            /** Allocation Id */
+            allocation_id: string | null;
             /** Ended At */
             ended_at: string | null;
             /**
@@ -474,8 +474,6 @@ export interface components {
              * Format: uuid
              */
             job_id: string;
-            /** Manifest Id */
-            manifest_id: string | null;
             /** Number */
             number: number;
             /** Orchestrator Url */
@@ -489,6 +487,8 @@ export interface components {
             payment_sent: boolean;
             /** Runner Url */
             runner_url: string | null;
+            /** Sessions */
+            sessions: components["schemas"]["SignedSession"][];
             /**
              * Started At
              * Format: date-time
@@ -1043,6 +1043,27 @@ export interface components {
             max_duration_s: number;
             /** Operation Ref */
             operation_ref?: string | null;
+        };
+        /**
+         * SignedSession
+         * @description One session the signer signed for an attempt.
+         *
+         *     ``manifest_id`` is the orchestrator's label from the 402 challenge. Cost sync resolves it to
+         *     the Batteries ``payment_session_id`` on ``(allocation_id, manifest_id)``. ``match`` stays
+         *     ``unmatched`` until that resolution, becomes ``matched`` when exactly one Batteries session
+         *     and one log entry share the key, and ``ambiguous`` when they do not.
+         */
+        SignedSession: {
+            /** Manifest Id */
+            manifest_id: string;
+            /**
+             * Match
+             * @default unmatched
+             * @enum {string}
+             */
+            match: "unmatched" | "matched" | "ambiguous";
+            /** Payment Session Id */
+            payment_session_id?: string | null;
         };
         /** StatusBody */
         StatusBody: {
