@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
 
 import { isAllowance, isCostSummary, isJob, isJobCost, isOffering, isReconciliation, listOf } from "@/gyral/guards";
-import { api } from "@/lib/client-api";
+import { api, type ApiResult } from "@/lib/client-api";
 import type { Allowance, CostSummary, Job, JobCost, Offering, Reconciliation } from "@/lib/engine/types";
 import { nextJobCost } from "@/lib/job-costs";
 import { JOB_LIST_LIMIT } from "@/lib/job-history";
@@ -14,6 +14,22 @@ const isOfferings = listOf(isOffering);
 
 function unchanged<T>(current: T, next: T): T {
   return JSON.stringify(current) === JSON.stringify(next) ? current : next;
+}
+
+function applyChecked<T extends S, S>(
+  result: ApiResult,
+  accept: (body: unknown) => body is T,
+  invalidMessage: string,
+  setValue: Dispatch<SetStateAction<S>>,
+  setError: Dispatch<SetStateAction<string>>,
+): void {
+  if (result.ok && accept(result.body)) {
+    const next = result.body;
+    setValue((current) => unchanged(current, next));
+    setError("");
+    return;
+  }
+  setError(result.ok ? invalidMessage : result.error);
 }
 
 export function useConsoleData() {
@@ -41,31 +57,19 @@ export function useConsoleData() {
       api("/api/reconciliation"),
     ]).then(([jobsResult, allowanceResult, offeringsResult, reconciliationResult]) => {
       if (!active) return;
-      if (jobsResult.ok && isJobs(jobsResult.body)) {
-        const next = jobsResult.body;
-        setJobs((current) => unchanged(current, next));
-        setJobsError("");
-      } else {
-        setJobsError(jobsResult.ok ? "Jobs could not be loaded." : jobsResult.error);
-      }
-      if (allowanceResult.ok && isAllowance(allowanceResult.body)) {
-        const nextAllowance = allowanceResult.body;
-        setAllowance((current) => unchanged<Allowance | null>(current, nextAllowance));
-        setAllowanceError("");
-      } else {
-        setAllowanceError(allowanceResult.ok ? "Allowance could not be loaded." : allowanceResult.error);
-      }
+      applyChecked(jobsResult, isJobs, "Jobs could not be loaded.", setJobs, setJobsError);
+      applyChecked(allowanceResult, isAllowance, "Allowance could not be loaded.", setAllowance, setAllowanceError);
       if (offeringsResult.ok && isOfferings(offeringsResult.body)) {
         const nextOfferings = offeringsResult.body;
         setOfferings((current) => unchanged(current, nextOfferings));
       }
-      if (reconciliationResult.ok && isReconciliation(reconciliationResult.body)) {
-        const nextReconciliation = reconciliationResult.body;
-        setReconciliation((current) => unchanged<Reconciliation | null>(current, nextReconciliation));
-        setReconciliationError("");
-      } else {
-        setReconciliationError(reconciliationResult.ok ? "Reconciliation could not be loaded." : reconciliationResult.error);
-      }
+      applyChecked(
+        reconciliationResult,
+        isReconciliation,
+        "Reconciliation could not be loaded.",
+        setReconciliation,
+        setReconciliationError,
+      );
       setLoaded(true);
     });
     return () => {
