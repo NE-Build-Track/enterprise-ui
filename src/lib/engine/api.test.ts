@@ -2,7 +2,7 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, expect, it } from "vitest";
 
-import { jobResult, provisionActor, readyz, reservedProbes, runJob } from "./api";
+import { jobResult, listGrants, provisionActor, readyz, reservedProbes, runJob } from "./api";
 import { createEngineCall } from "./client";
 import { EngineRequestError } from "./errors";
 
@@ -106,8 +106,9 @@ it("provisions an actor allocation in USD", async () => {
     actorId: "ada",
     amount: "1",
     label: "ada",
+    grantId: "grant-1",
   });
-  expect(body).toEqual({ amount: { amount: "1", currency: "USD" }, label: "ada" });
+  expect(body).toEqual({ amount: { amount: "1", currency: "USD" }, label: "ada", grant_id: "grant-1" });
   expect(actor.allocation_id).toBe("alloc");
   expect(actor.status).toBe("active");
 });
@@ -130,6 +131,11 @@ it("maps a reserved 501 onto milestone and ticket", async () => {
     [501, "M4", "ISS-27"],
     [501, "M4", "ISS-26"],
   ]);
+});
+
+it("rejects a grants body that is not a list", async () => {
+  server.use(http.get("http://engine.test/v1/admin/grants", () => HttpResponse.json({ items: [] })));
+  await expect(listGrants(call())).rejects.toBeInstanceOf(EngineRequestError);
 });
 
 it("throws a typed error for an unknown key", async () => {

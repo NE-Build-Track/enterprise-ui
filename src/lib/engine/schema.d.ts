@@ -806,6 +806,12 @@ export interface components {
         ProvisionBody: {
             amount: components["schemas"]["Money-Input"];
             /**
+             * Grant Id
+             * @description Defaults to empty. The admin UI always sends one.
+             * @default
+             */
+            grant_id?: string;
+            /**
              * Label
              * @default
              */

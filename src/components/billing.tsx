@@ -8,7 +8,7 @@ import { loadAllowanceMeter, loadCostBreakdown, loadReconciliationCard } from "@
 import { isRecord } from "@/lib/engine/errors";
 import { COST_CLASSES, type CostClass } from "@/lib/engine/types";
 import { formatWindow, jobTitle, periodSpendUsd } from "@/lib/job-copy";
-import { inWindow, jobsForClass } from "@/lib/job-history";
+import { billingCostJobs, inWindow, jobsForClass } from "@/lib/job-history";
 import { feePositive, formatDisplayMoney, formatUsdDisplay } from "@/lib/money";
 
 import { useConsoleData, useJobCosts } from "./use-console";
@@ -30,7 +30,8 @@ export function Billing() {
     const matched = data.jobs.filter((job) => inWindow(job, data.start, data.end));
     return [...matched].sort((left, right) => right.created_at.localeCompare(left.created_at));
   }, [data.end, data.jobs, data.start]);
-  const pricedJobs = windowJobs.slice(0, 25);
+  const priced = billingCostJobs(windowJobs);
+  const pricedJobs = priced.jobs;
   const costRevision = pricedJobs.map((job) => `${job.id}\t${job.state}\t${job.completed_at ?? ""}`).join("\n");
   const costs = useJobCosts(
     pricedJobs.map((job) => job.id),
@@ -38,7 +39,7 @@ export function Billing() {
   );
   const loadedCount = pricedJobs.filter((job) => costs.has(job.id)).length;
   const costsReady = pricedJobs.length === 0 || loadedCount === pricedJobs.length;
-  const outside = windowJobs.length > pricedJobs.length;
+  const outside = priced.truncated;
 
   const onRange = (detail: unknown) => {
     if (!isRecord(detail) || detail._tag !== "RangeChanged") return;

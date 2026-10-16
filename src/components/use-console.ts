@@ -12,6 +12,7 @@ const isJobs = listOf(isJob);
 const isOfferings = listOf(isOffering);
 const JOB_POLL_MS = 3_000;
 const SUMMARY_POLL_MS = 30_000;
+const COST_POLL_MS = 30_000;
 
 function unchanged<T>(current: T, next: T): T {
   return JSON.stringify(current) === JSON.stringify(next) ? current : next;
@@ -131,36 +132,40 @@ export function useConsoleData() {
   };
 }
 
+export function costPollDelay(jobIds: readonly string[]): number | null {
+  return jobIds.length > 0 ? COST_POLL_MS : null;
+}
+
 export function useJobCosts(ids: readonly string[], revision: string): ReadonlyMap<string, JobCost | null> {
   const idKey = ids.join("\n");
   const [costs, setCosts] = useState<ReadonlyMap<string, JobCost | null>>(new Map());
-  const seen = useRef(new Map<string, string>());
 
   useEffect(() => {
     const jobIds = idKey ? idKey.split("\n") : [];
+    const delay = costPollDelay(jobIds);
+    if (delay === null) return;
     const allowed = new Set(jobIds);
-    const revisions = seen.current;
-    const pending = costIdsToFetch(jobIds, revision, revisions);
-    if (pending.length === 0) return;
-    const lines = revisionLines(revision);
-    for (const id of pending) revisions.set(id, lines.get(id) ?? "");
     let cancelled = false;
-    void Promise.all(pending.map(fetchJobCost)).then((rows) => {
-      if (cancelled) return;
-      setCosts((current) => {
-        const next = new Map<string, JobCost | null>();
-        for (const [id, cost] of current) {
-          if (allowed.has(id)) next.set(id, cost);
-        }
-        for (const [id, cost] of rows) {
-          if (allowed.has(id)) next.set(id, cost);
-        }
-        return next;
+    let generation = 0;
+
+    const load = () => {
+      const request = ++generation;
+      void Promise.all(jobIds.map(fetchJobCost)).then((rows) => {
+        if (cancelled || request !== generation) return;
+        setCosts((current) => mergeJobCosts(current, rows, allowed));
       });
-    });
+    };
+
+    load();
+    const timer = setInterval(load, delay);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       cancelled = true;
-      for (const id of pending) revisions.delete(id);
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [idKey, revision]);
 
@@ -168,19 +173,19 @@ export function useJobCosts(ids: readonly string[], revision: string): ReadonlyM
   return retainCosts(costs, allowed);
 }
 
-function revisionLines(revision: string): ReadonlyMap<string, string> {
-  const lines = new Map<string, string>();
-  for (const line of revision.split("\n")) {
-    if (!line) continue;
-    const tab = line.indexOf("\t");
-    lines.set(tab === -1 ? line : line.slice(0, tab), line);
+export function mergeJobCosts(
+  current: ReadonlyMap<string, JobCost | null>,
+  rows: readonly (readonly [string, JobCost | null])[],
+  allowed: ReadonlySet<string>,
+): ReadonlyMap<string, JobCost | null> {
+  const next = new Map<string, JobCost | null>();
+  for (const [id, cost] of current) {
+    if (allowed.has(id)) next.set(id, cost);
   }
-  return lines;
-}
-
-function costIdsToFetch(ids: readonly string[], revision: string, seen: ReadonlyMap<string, string>): readonly string[] {
-  const lines = revisionLines(revision);
-  return ids.filter((id) => seen.get(id) !== lines.get(id));
+  for (const [id, cost] of rows) {
+    if (allowed.has(id)) next.set(id, cost);
+  }
+  return next;
 }
 
 function retainCosts(

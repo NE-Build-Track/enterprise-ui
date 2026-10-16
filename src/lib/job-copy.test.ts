@@ -3,7 +3,7 @@ import { expect, it } from "vitest";
 import { fieldsMismatch } from "./capability-schema";
 import type { CostSummary, Job, JobCost } from "./engine/types";
 import { failureCopy, formatJobCost, jobStateLabel, lastUpdate, offeringCopy, periodSpendUsd, reconciliationCopy, readyCopy, tasksMatching } from "./job-copy";
-import { filterJobs, inWindow, paginate, readJobFilters } from "./job-history";
+import { billingCostJobs, filterJobs, inWindow, paginate, readJobFilters } from "./job-history";
 
 const job = (patch: Partial<Job>): Job => ({
   id: "job-1",
@@ -98,6 +98,12 @@ it("shows awaiting cost separately from a known USD fee", () => {
   };
   expect(formatJobCost(pending, "USD").text).toBe("Awaiting cost");
   expect(formatJobCost({ ...pending, status: "observed", fees: { fee_eth: "1", fee_usd: "2.96", row_count: 1 } }, "USD").text).toBe("$2.96");
+  expect(
+    formatJobCost(
+      { ...pending, status: "observed", fees: { fee_eth: "4.10026156E-10", fee_usd: "9.97880655857E-7", row_count: 1 } },
+      "USD",
+    ).text,
+  ).toBe("<$0.01");
   const unpriced = formatJobCost({ ...pending, status: "observed", fees: { fee_eth: "0.01", fee_usd: null, row_count: 1 } }, "USD");
   expect(unpriced.text).toBe("No USD price");
   expect(unpriced.exact).toBe("0.01 ETH");
@@ -126,6 +132,15 @@ it("compares a billing window by instant, not text", () => {
   const created = job({ created_at: "2026-10-14T00:00:00.100Z" });
   expect(inWindow(created, "2026-10-14T00:00:00+00:00", "2026-10-14T00:00:00.100Z")).toBe(true);
   expect(inWindow(created, "2026-10-14T00:00:00.200Z", "2026-10-15T00:00:00Z")).toBe(false);
+});
+
+it("prices at most 25 in-window jobs and marks omitted jobs", () => {
+  const windowJobs = Array.from({ length: 26 }, (_, index) => job({ id: `job-${index}` }));
+  const priced = billingCostJobs(windowJobs);
+
+  expect(priced.jobs).toHaveLength(25);
+  expect(priced.truncated).toBe(true);
+  expect(billingCostJobs(windowJobs.slice(0, 25)).truncated).toBe(false);
 });
 
 it("filters, searches, and pages newest first", () => {
