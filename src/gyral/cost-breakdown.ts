@@ -1,7 +1,8 @@
 import { define, html, outputs, prop } from "@gyral/core";
 
 import { COST_CLASSES, type CostSummary } from "@/lib/engine/types";
-import { formatEth, formatUsd, percentWidth, sumDecimals } from "@/lib/money";
+import { formatWindow } from "@/lib/job-copy";
+import { formatEth, formatUsdDisplay, percentWidth, sumDecimals } from "@/lib/money";
 
 import { isCostSummary, orNull, sameJson } from "./guards";
 import { widgetStyles } from "./styles";
@@ -10,7 +11,7 @@ const LABELS: Record<(typeof COST_CLASSES)[number], string> = {
   delivered: "Delivered",
   failed_after_payment: "Failed after payment",
   uncertain: "Uncertain",
-  pending: "Pending",
+  pending: "Awaiting finalization",
 };
 
 export type CostOutput = { readonly _tag: "RangeChanged"; readonly start: string; readonly end: string };
@@ -92,8 +93,10 @@ export const CostBreakdown = define<State, Msg, Props, CostOutput>()("lp-cost-br
 function summaryView(summary: CostSummary | null) {
   if (!summary) return html`<p role="status">No cost summary yet.</p>`;
   const total = usdTotal(summary);
+  const period = formatWindow(summary.start, summary.end);
   return html`
-    <p>${summary.jobs_with_cost} jobs with cost, ${summary.jobs_pending} pending.</p>
+    <p>Spend during selected period, ${period}.</p>
+    <p>${summary.jobs_with_cost} jobs with cost. ${summary.jobs_pending} jobs awaiting cost.</p>
     ${
       total
         ? html`<div class="bar wide" aria-hidden="true">
@@ -104,14 +107,35 @@ function summaryView(summary: CostSummary | null) {
           </div>`
         : ""
     }
-    <dl>
-      ${COST_CLASSES.map(
-        (name) => html`
-          <dt>${LABELS[name]}</dt>
-          <dd>${formatUsd(summary.by_class[name]?.fee_usd)} · ${formatEth(summary.by_class[name]?.fee_eth)}</dd>
-        `,
-      )}
-    </dl>
+    <table>
+      <caption>Cost classes for ${period}</caption>
+      <thead>
+        <tr>
+          <th scope="col">Category</th>
+          <th scope="col">Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${COST_CLASSES.map((name) => {
+          const display = formatUsdDisplay(summary.by_class[name]?.fee_usd);
+          return html`<tr>
+            <th scope="row">${LABELS[name]}</th>
+            <td title=${display.exact}>${display.text}</td>
+          </tr>`;
+        })}
+      </tbody>
+    </table>
+    <details>
+      <summary>ETH amounts</summary>
+      <dl>
+        ${COST_CLASSES.map(
+          (name) => html`
+            <dt>${LABELS[name]}</dt>
+            <dd>${formatEth(summary.by_class[name]?.fee_eth)}</dd>
+          `,
+        )}
+      </dl>
+    </details>
   `;
 }
 

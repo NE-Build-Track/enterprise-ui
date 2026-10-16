@@ -27,7 +27,7 @@ export async function POST(request: Request): Promise<Response> {
     const claims = actor ? { ...login, actorId: actor.actorId, applicationId: actor.applicationId } : login;
     await writeSession(claims);
     if (form) {
-      const path = claims.role === "operator" ? "/operator" : "/dashboard";
+      const path = claims.role === "operator" ? "/operator" : "/overview";
       return NextResponse.redirect(new URL(path, request.url), 303);
     }
     return Response.json({

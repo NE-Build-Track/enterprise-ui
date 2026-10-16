@@ -1,18 +1,33 @@
 import { define, each, html, outputs, prop, type TemplateResult } from "@gyral/core";
 
 import type { Attempt, Job, JobCost } from "@/lib/engine/types";
+import {
+  failureCopy,
+  formatDuration,
+  formatJobCost,
+  formatSubmitted,
+  jobStateLabel,
+  jobStateTone,
+  lastUpdate,
+  type BillingCurrency,
+} from "@/lib/job-copy";
 import { formatEth, formatTime, formatUsd } from "@/lib/money";
 
 import { isJob, isJobCost, orNull, sameJson } from "./guards";
 import { widgetStyles } from "./styles";
 
-export type TimelineOutput = { readonly _tag: "ReportUsage"; readonly quantities: Readonly<Record<string, number>> };
+export type TimelineOutput =
+  | { readonly _tag: "ReportUsage"; readonly quantities: Readonly<Record<string, number>> }
+  | { readonly _tag: "RunAgain" };
 
 type Props = {
   readonly job: Job | null;
   readonly cost: JobCost | null;
   readonly error: string;
   readonly usageError: string;
+  readonly currency: BillingCurrency;
+  readonly repeat: boolean;
+  readonly repeating: boolean;
 };
 
 type State = { readonly name: string; readonly amount: string; readonly formError: string };
@@ -21,9 +36,14 @@ type Msg =
   | { readonly _tag: "Name"; readonly value: string }
   | { readonly _tag: "Amount"; readonly value: string }
   | { readonly _tag: "Invalid"; readonly message: string }
-  | { readonly _tag: "Report"; readonly quantities: Readonly<Record<string, number>> };
+  | { readonly _tag: "Report"; readonly quantities: Readonly<Record<string, number>> }
+  | { readonly _tag: "Again" };
 
 const emit = outputs<TimelineOutput>();
+
+function isCurrency(value: unknown): value is BillingCurrency {
+  return value === "USD" || value === "ETH";
+}
 
 const AttemptRow = (attempt: Attempt): TemplateResult => html`
   <tr>
@@ -50,6 +70,9 @@ export const JobTimeline = define<State, Msg, Props, TimelineOutput>()("lp-job-t
     cost: prop.value(orNull(isJobCost), { default: null, equals: sameJson }),
     error: prop.string({ default: "" }),
     usageError: prop.string({ default: "" }),
+    currency: prop.value(isCurrency, { default: "USD" }),
+    repeat: prop.boolean({ default: false }),
+    repeating: prop.boolean({ default: false }),
   },
   styles: widgetStyles,
   init: () => ({ name: "", amount: "", formError: "" }),
@@ -64,50 +87,54 @@ export const JobTimeline = define<State, Msg, Props, TimelineOutput>()("lp-job-t
       }
       return { _tag: "Report", quantities: { [name]: Number(ctx.state.amount) } };
     },
+    Again: true,
   },
   update: {
     Name: (s, m) => ({ ...s, name: m.value }),
     Amount: (s, m) => ({ ...s, amount: m.value }),
     Invalid: (s, m) => ({ ...s, formError: m.message }),
     Report: (s, m) => [{ ...s, formError: "" }, [emit({ _tag: "ReportUsage", quantities: m.quantities })]],
+    Again: (s) => [s, [emit({ _tag: "RunAgain" })]],
   },
   view: (s, intents, ctx) => {
     const job = ctx.props.job;
-    if (!job) return html`<p role="status">${ctx.props.error || "Select a job."}</p>`;
-    const canReport = job.state === "succeeded" && job.usage === null;
-    const tone = job.state === "succeeded" ? "ok" : job.state === "failed" ? "bad" : "wait";
-    const cost = ctx.props.cost;
-    const attemptLabel = job.attempts.length === 1 ? "attempt" : "attempts";
+    if (!job) return html`<p role="status">${ctx.props.error || "This job is not loaded."}</p>`;
+    const amount = formatJobCost(ctx.props.cost, ctx.props.currency);
+    const updated = lastUpdate(job);
     return html`
       <p>
-        <strong class="chip" data-tone=${tone}>${job.state}</strong>
-        ${cost ? html`${formatUsd(cost.fees.fee_usd)} · ${formatEth(cost.fees.fee_eth)}` : "Cost pending"}
-        across ${job.attempts.length} ${attemptLabel}. Created
-        <time datetime=${job.created_at}>${formatTime(job.created_at)}</time>.
+        <strong class="chip" data-tone=${jobStateTone(job.state)}>${jobStateLabel(job.state)}</strong>
+        <span title=${amount.exact}>${amount.text}</span>
       </p>
-      <p class="muted">Job <code>${job.id}</code></p>
-      ${job.failure ? html`<p role="alert">${job.failure.kind}: ${job.failure.message}</p>` : ""}
-      ${job.failure?.body ? html`<pre><samp>${job.failure.body}</samp></pre>` : ""}
-      <table>
-        <caption>Attempts for this job</caption>
-        <thead>
-          <tr>
-            <th scope="col">#</th>
-            <th scope="col">Outcome</th>
-            <th scope="col">Orchestrator</th>
-            <th scope="col">Paid</th>
-            <th scope="col">Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${each(job.attempts, (attempt) => attempt.number, AttemptRow)}
-        </tbody>
-      </table>
-      ${
-        job.attempts.length > 0
-          ? html`<details>
-              <summary>Technical details</summary>
-              <table>
+      ${outcome(job, ctx.props.repeat, ctx.props.repeating, intents.Again)}
+      <p>
+        Submitted <time datetime=${job.created_at}>${formatSubmitted(job.created_at)}</time>. Duration
+        ${formatDuration(job.created_at, job.completed_at)}.
+        ${job.state === "running" || job.state === "queued" ? html`Last update <time datetime=${updated}>${formatSubmitted(updated)}</time>.` : ""}
+      </p>
+      <details>
+        <summary>Technical details</summary>
+        <p class="muted">Job <code>${job.id}</code></p>
+        ${job.operation_ref ? html`<p class="muted">Operation ref <code>${job.operation_ref}</code></p>` : ""}
+        ${job.failure?.body ? html`<pre><samp>${job.failure.body}</samp></pre>` : ""}
+        <table>
+          <caption>Attempts for this job</caption>
+          <thead>
+            <tr>
+              <th scope="col">#</th>
+              <th scope="col">Outcome</th>
+              <th scope="col">Orchestrator</th>
+              <th scope="col">Paid</th>
+              <th scope="col">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${each(job.attempts, (attempt) => attempt.number, AttemptRow)}
+          </tbody>
+        </table>
+        ${
+          job.attempts.length > 0
+            ? html`<table>
                 <caption>Runner, manifest, and payment session for each attempt</caption>
                 <thead>
                   <tr>
@@ -120,11 +147,11 @@ export const JobTimeline = define<State, Msg, Props, TimelineOutput>()("lp-job-t
                 <tbody>
                   ${each(job.attempts, (attempt) => attempt.number, TechnicalRow)}
                 </tbody>
-              </table>
-            </details>`
-          : ""
-      }
-      ${costView(cost)}
+              </table>`
+            : ""
+        }
+        ${costView(ctx.props.cost)}
+      </details>
       ${
         job.usage
           ? html`<p>
@@ -135,7 +162,7 @@ export const JobTimeline = define<State, Msg, Props, TimelineOutput>()("lp-job-t
           : ""
       }
       ${
-        canReport
+        job.state === "succeeded" && job.usage === null
           ? html`<form data-intent=${intents.Send}>
               <fieldset>
                 <legend>Report usage</legend>
@@ -155,6 +182,28 @@ export const JobTimeline = define<State, Msg, Props, TimelineOutput>()("lp-job-t
     `;
   },
 });
+
+function outcome(job: Job, repeat: boolean, repeating: boolean, again: string) {
+  if (job.state === "succeeded") return "";
+  if (job.state === "failed") {
+    const copy = failureCopy(job.failure?.kind);
+    return html`
+      <p role="alert">${copy.title} ${job.failure?.message ?? ""}</p>
+      <p>${copy.recovery}</p>
+      ${
+        repeat
+          ? html`<p>
+              <button type="button" data-intent=${again} ?disabled=${repeating}>Run again</button>
+            </p>`
+          : ""
+      }
+    `;
+  }
+  if (job.state === "uncertain") {
+    return html`<p>The outcome of this job is uncertain.</p>`;
+  }
+  return html`<p>This job is ${jobStateLabel(job.state).toLowerCase()}. Progress percentage is not available.</p>`;
+}
 
 function costView(cost: JobCost | null) {
   if (!cost) return "";

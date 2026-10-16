@@ -1,6 +1,6 @@
 import { define, html, prop, type Stateless } from "@gyral/core";
 
-import { formatMoney } from "@/lib/money";
+import { formatDisplayMoney } from "@/lib/money";
 import type { Allowance } from "@/lib/engine/types";
 
 import { isAllowance, orNull, sameJson } from "./guards";
@@ -35,6 +35,9 @@ export const AllowanceMeter = define<Stateless, never, Props>()("lp-allowance-me
     const grantedNumber = finiteNumber(granted);
     const spentNumber = finiteNumber(spent);
     const tone = allowance.status === "active" ? "ok" : "wait";
+    const grantedText = formatDisplayMoney(allowance.granted);
+    const spentText = formatDisplayMoney(allowance.spent);
+    const availableText = formatDisplayMoney(allowance.available);
     return html`
       <p>
         <strong class="chip" data-tone=${tone}>${allowance.status}</strong>
@@ -43,18 +46,29 @@ export const AllowanceMeter = define<Stateless, never, Props>()("lp-allowance-me
       ${
         grantedNumber !== null && spentNumber !== null && grantedNumber > 0
           ? html`<meter min="0" max=${String(grantedNumber)} value=${String(Math.min(spentNumber, grantedNumber))}>
-              ${formatMoney(allowance.spent)} spent of ${formatMoney(allowance.granted)}
+              ${spentText.text} used of ${grantedText.text}
             </meter>`
           : ""
       }
       <dl>
         <dt>Granted</dt>
-        <dd>${formatMoney(allowance.granted)}</dd>
-        <dt>Spent</dt>
-        <dd>${formatMoney(allowance.spent)}</dd>
+        <dd title=${grantedText.exact}>${grantedText.text}</dd>
+        <dt>Total allowance used</dt>
+        <dd title=${spentText.exact}>${spentText.text}</dd>
         <dt>Available</dt>
-        <dd>${formatMoney(allowance.available)}</dd>
+        <dd title=${availableText.exact}>${availableText.text}</dd>
       </dl>
+      <details>
+        <summary>Exact amounts</summary>
+        <dl>
+          <dt>Granted</dt>
+          <dd>${grantedText.exact || "Pending"}</dd>
+          <dt>Total allowance used</dt>
+          <dd>${spentText.exact || "Pending"}</dd>
+          <dt>Available</dt>
+          <dd>${availableText.exact || "Pending"}</dd>
+        </dl>
+      </details>
     `;
   },
 });

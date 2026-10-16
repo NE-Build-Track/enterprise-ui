@@ -23,7 +23,7 @@ export default function LoginPage() {
       return;
     }
     const operator = isRecord(result.body) && result.body.role === "operator";
-    router.push(operator ? "/operator" : "/dashboard");
+    router.push(operator ? "/operator" : "/overview");
   }
 
   return (

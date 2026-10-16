@@ -23,7 +23,8 @@
   input,
   button,
   textarea,
-  select {
+  select,
+  output {
     font: inherit;
     color: inherit;
   }
@@ -61,8 +62,8 @@
     --surface: light-dark(oklch(95.3% 0.013 var(--warm)), oklch(20% 0.012 var(--warm)));
     --surface-raised: light-dark(oklch(99.4% 0.007 var(--warm)), oklch(25% 0.014 var(--warm)));
     --text: light-dark(oklch(21.5% 0.009 var(--warm)), oklch(94% 0.012 var(--warm)));
-    --text-muted: color-mix(in oklch, var(--text) 62%, var(--surface));
-    --border: color-mix(in oklch, var(--text) 16%, var(--surface));
+    --text-muted: color-mix(in oklch, var(--text) 82%, var(--surface));
+    --border: color-mix(in oklch, var(--text) 32%, var(--surface));
 
     --space: clamp(1rem, 0.6rem + 1vw, 1.5rem);
     --step--1: clamp(0.75rem, 0.7rem + 0.15vw, 0.85rem);
@@ -309,6 +310,25 @@
     border-block-end-color: var(--text);
   }
 
+  .masthead a.primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-block-size: 2.75rem;
+    min-inline-size: 2.75rem;
+    padding-inline: 0.95rem;
+    border: 2px solid var(--text);
+    border-radius: 999px;
+    background: var(--text);
+    color: var(--surface);
+    text-decoration: none;
+  }
+
+  .masthead a.primary[aria-current="page"] {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+  }
+
   .session {
     display: flex;
     flex-wrap: wrap;
@@ -491,11 +511,18 @@
   input,
   select,
   textarea {
-    border: 1px solid var(--border);
+    border: 2px solid var(--border);
     border-radius: 0.45rem;
     padding-block: 0.55rem;
     padding-inline: 0.65rem;
     background: var(--surface-raised);
+  }
+
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
   }
 
   textarea {
@@ -538,6 +565,107 @@
     align-items: end;
   }
 
+  .cluster a,
+  nav[aria-label="Job pages"] a,
+  nav[aria-label="Job pages"] span {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 2.75rem;
+    min-inline-size: 2.75rem;
+    padding-inline: 0.75rem;
+  }
+
+  .job-page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .job-page > hgroup,
+  .job-page > h1,
+  .job-page > p,
+  .job-page > .panel,
+  .job-page > .composer {
+    inline-size: min(100%, 64rem);
+  }
+
+  .result-field {
+    inline-size: 100%;
+    max-inline-size: 40rem;
+    min-block-size: 8rem;
+    max-block-size: 20rem;
+    overflow: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    font-family: ui-monospace, "IBM Plex Mono", monospace;
+  }
+
+  .composer {
+    max-inline-size: 64rem;
+  }
+
+  .stack {
+    display: grid;
+    gap: var(--space);
+    margin-block-start: var(--space);
+  }
+
+  .filters form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: end;
+  }
+
+  .filters label {
+    flex: 1 1 12rem;
+  }
+
+  .recent {
+    display: grid;
+    gap: 0.35rem;
+    margin: 0.5rem 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .recent li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 1rem;
+    align-items: baseline;
+    max-inline-size: none;
+  }
+
+  .recent a {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 2.75rem;
+  }
+
+  .breakdown {
+    inline-size: 100%;
+    border-collapse: collapse;
+  }
+
+  .breakdown th,
+  .breakdown td {
+    padding-block: 0.55rem;
+    padding-inline: 0.4rem;
+    border-block-end: 1px solid var(--border);
+    text-align: start;
+    vertical-align: top;
+  }
+
+  @media (max-width: 45rem) {
+    .filters form,
+    .recent li,
+    .stack {
+      display: grid;
+    }
+  }
+
   .once-row {
     display: flex;
     flex-wrap: nowrap;
@@ -561,7 +689,12 @@
     overflow-y: hidden;
   }
 
+  output {
+    display: block;
+  }
+
   .note,
+  output,
   [role="status"] {
     color: var(--text-muted);
   }

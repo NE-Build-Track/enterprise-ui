@@ -1,7 +1,8 @@
 import { define, html, prop, type Stateless } from "@gyral/core";
 
 import { COST_CLASSES, type Reconciliation } from "@/lib/engine/types";
-import { formatEth, formatMoney, formatUsd } from "@/lib/money";
+import { reconciliationCopy } from "@/lib/job-copy";
+import { formatDisplayMoney, formatEth, formatUsdDisplay } from "@/lib/money";
 
 import { isReconciliation, orNull, sameJson } from "./guards";
 import { widgetStyles } from "./styles";
@@ -12,7 +13,7 @@ const LABELS: Record<(typeof COST_CLASSES)[number], string> = {
   delivered: "Delivered",
   failed_after_payment: "Failed after payment",
   uncertain: "Uncertain",
-  pending: "Pending",
+  pending: "Awaiting finalization",
 };
 
 export const ReconciliationCard = define<Stateless, never, Props>()("lp-reconciliation-card", {
@@ -24,25 +25,54 @@ export const ReconciliationCard = define<Stateless, never, Props>()("lp-reconcil
   view: (_state, _intents, ctx) => {
     const row = ctx.props.reconciliation;
     if (!row) return html`<p role="status">${ctx.props.error || "No reconciliation yet."}</p>`;
-    const badge = row.balanced === true ? "balanced" : row.balanced === false ? "unbalanced" : "unavailable";
-    const tone = row.balanced === true ? "ok" : row.balanced === false ? "bad" : "wait";
+    const copy = reconciliationCopy(row.balanced);
+    const provider = formatDisplayMoney(row.provider_spent);
+    const unattributed = formatUsdDisplay(row.unattributed.fee_usd);
     return html`
       <p>
-        <strong class="chip" data-tone=${tone}>${badge}</strong> <code>${row.allocation_id}</code>
+        <strong class="chip" data-tone=${copy.tone}>${copy.label}</strong> <code>${row.allocation_id}</code>
       </p>
-      <dl>
-        <dt>Provider spent</dt>
-        <dd>${formatMoney(row.provider_spent)}</dd>
-        ${COST_CLASSES.map(
-          (name) => html`
-            <dt>${LABELS[name]}</dt>
-            <dd>${formatUsd(row.by_class[name]?.fee_usd)} · ${formatEth(row.by_class[name]?.fee_eth)}</dd>
-          `,
-        )}
-        <dt>Unattributed</dt>
-        <dd>${formatUsd(row.unattributed.fee_usd)} · ${formatEth(row.unattributed.fee_eth)}</dd>
-      </dl>
-      ${row.balanced === false ? html`<p>Provider spend does not match the jobs we attributed it to.</p>` : ""}
+      <p>${copy.detail} Reconciliation covers this allocation, not only the selected spending period.</p>
+      <table>
+        <caption>What reconciliation compared</caption>
+        <thead>
+          <tr>
+            <th scope="col">Category</th>
+            <th scope="col">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th scope="row">Provider spent</th>
+            <td title=${provider.exact}>${provider.text}</td>
+          </tr>
+          ${COST_CLASSES.map((name) => {
+            const display = formatUsdDisplay(row.by_class[name]?.fee_usd);
+            return html`<tr>
+              <th scope="row">${LABELS[name]}</th>
+              <td title=${display.exact}>${display.text}</td>
+            </tr>`;
+          })}
+          <tr>
+            <th scope="row">Unattributed</th>
+            <td title=${unattributed.exact}>${unattributed.text}</td>
+          </tr>
+        </tbody>
+      </table>
+      <p>Unattributed is spend that was not tied to a job. It is part of the balanced total, not a second bill.</p>
+      <details>
+        <summary>ETH amounts</summary>
+        <dl>
+          ${COST_CLASSES.map(
+            (name) => html`
+              <dt>${LABELS[name]}</dt>
+              <dd>${formatEth(row.by_class[name]?.fee_eth)}</dd>
+            `,
+          )}
+          <dt>Unattributed</dt>
+          <dd>${formatEth(row.unattributed.fee_eth)}</dd>
+        </dl>
+      </details>
     `;
   },
 });

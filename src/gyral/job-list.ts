@@ -1,90 +1,73 @@
-import { define, each, html, outputs, prop, type TemplateResult } from "@gyral/core";
+import { define, each, html, prop, type Stateless, type TemplateResult } from "@gyral/core";
 
-import type { Job } from "@/lib/engine/types";
-import { formatTime } from "@/lib/money";
+import type { Job, JobCost } from "@/lib/engine/types";
+import { formatDuration, formatJobCost, formatSubmitted, jobStateLabel, jobStateTone, jobTitle, type BillingCurrency } from "@/lib/job-copy";
 
-import { isJob, listOf, sameJson } from "./guards";
+import { isJob, isJobCost, listOf, sameJson } from "./guards";
 import { widgetStyles } from "./styles";
 
-export type JobListOutput = { readonly _tag: "OpenJob"; readonly id: string };
+type Props = {
+  readonly jobs: readonly Job[];
+  readonly error: string;
+  readonly currency: BillingCurrency;
+  readonly costs: readonly JobCost[];
+};
 
-type Props = { readonly jobs: readonly Job[]; readonly error: string; readonly selectedId: string };
-type Msg = { readonly _tag: "Open"; readonly id: string };
-
-const emit = outputs<JobListOutput>();
-
-function stateTone(state: Job["state"]): "ok" | "bad" | "wait" {
-  if (state === "succeeded") return "ok";
-  if (state === "failed") return "bad";
-  return "wait";
+function isCurrency(value: unknown): value is BillingCurrency {
+  return value === "USD" || value === "ETH";
 }
 
-const Row = (job: Job, selectedId: string): TemplateResult => {
-  const selected = job.id === selectedId ? "true" : "false";
+const Row = (job: Job, cost: JobCost | null, currency: BillingCurrency): TemplateResult => {
+  const title = jobTitle(job);
+  const amount = cost ? formatJobCost(cost, currency) : { text: "Awaiting cost", exact: "" };
+  const action = job.result ? "View result" : "View details";
   return html`
-    <tr data-selected=${selected}>
+    <tr>
       <th scope="row">
-        <button
-          type="button"
-          class="quiet"
-          value=${job.id}
-          data-intent="Open"
-          aria-current=${job.id === selectedId ? "true" : "false"}
-        >
-          ${job.app}
-        </button>
+        <a href=${`/jobs/${job.id}`}>${title.name}</a>
+        <span class="muted">${title.detail}</span>
       </th>
-      <td class="state"><strong class="chip" data-tone=${stateTone(job.state)}>${job.state}</strong></td>
+      <td class="state"><strong class="chip" data-tone=${jobStateTone(job.state)}>${jobStateLabel(job.state)}</strong></td>
       <td class="when">
-        ${job.created_at ? html`<time datetime=${job.created_at}>${formatTime(job.created_at)}</time>` : ""}
+        ${job.created_at ? html`<time datetime=${job.created_at}>${formatSubmitted(job.created_at)}</time>` : ""}
       </td>
-    </tr>
-    <tr class="nested" data-selected=${selected}>
-      <td colspan="3">
-        <span class="field">Operation ref</span>
-        ${job.operation_ref ? html`<code>${job.operation_ref}</code>` : html`<span class="muted">None</span>`}
-      </td>
+      <td>${formatDuration(job.created_at, job.completed_at)}</td>
+      <td title=${amount.exact}>${amount.text}</td>
+      <td><a class="action" href=${job.result ? `/jobs/${job.id}#result` : `/jobs/${job.id}`}>${action}</a></td>
     </tr>
   `;
 };
 
-export const JobList = define<{ readonly selectedId: string }, Msg, Props, JobListOutput>()("lp-job-list", {
+export const JobList = define<Stateless, never, Props>()("lp-job-list", {
   props: {
     jobs: prop.value(listOf(isJob), { default: [], equals: sameJson }),
     error: prop.string({ default: "" }),
-    selectedId: prop.string({ default: "" }),
+    currency: prop.value(isCurrency, { default: "USD" }),
+    costs: prop.value(listOf(isJobCost), { default: [], equals: sameJson }),
   },
   styles: widgetStyles,
-  init: () => ({ selectedId: "" }),
-  intent: {
-    Open: ({ value }) => (value ? { _tag: "Open", id: value } : undefined),
-  },
-  update: {
-    Open: (s, m) => [{ selectedId: m.id }, [emit({ _tag: "OpenJob", id: m.id })]],
-  },
   view: (_state, _intents, ctx) => {
     const jobs = [...ctx.props.jobs].sort((left, right) => right.created_at.localeCompare(left.created_at));
+    const costs = new Map(ctx.props.costs.map((cost) => [cost.job_id, cost]));
     return html`
       ${ctx.props.error ? html`<p role="alert">${ctx.props.error}</p>` : ""}
       ${
         jobs.length === 0
-          ? html`<p role="status">No jobs for this key yet.</p>`
+          ? html`<p role="status">No jobs match.</p>`
           : html`<table class="jobs">
-              <caption>Jobs for this key, newest first</caption>
-              <colgroup>
-                <col />
-                <col class="state" />
-                <col class="when" />
-              </colgroup>
+              <caption>Jobs, newest first</caption>
               <thead>
                 <tr>
-                  <th scope="col">App</th>
-                  <th scope="col">State</th>
-                  <th scope="col">Created</th>
+                  <th scope="col">Job</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Submitted</th>
+                  <th scope="col">Duration</th>
+                  <th scope="col">Cost</th>
+                  <th scope="col">Action</th>
                 </tr>
               </thead>
               <tbody>
-                ${each(jobs, (job) => job.id, (job) => Row(job, ctx.props.selectedId))}
+                ${each(jobs, (job) => job.id, (job) => Row(job, costs.get(job.id) ?? null, ctx.props.currency))}
               </tbody>
             </table>`
       }
