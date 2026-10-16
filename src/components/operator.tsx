@@ -195,11 +195,11 @@ export function OperatorDesk() {
             }}
           >
             <label>
-              Grant name (required)
+              <span>Grant name (required)</span>
               <input value={grantName} onChange={(event) => setGrantName(event.target.value)} required autoComplete="off" />
             </label>
             <label>
-              Amount USD (required)
+              <span>Amount USD (required)</span>
               <input
                 value={grantAmount}
                 onChange={(event) => setGrantAmount(event.target.value)}
@@ -212,7 +212,7 @@ export function OperatorDesk() {
           </form>
           {grantError ? <p role="alert">{grantError}</p> : null}
           {grants.length === 0 ? (
-            <p role="status">No grants yet.</p>
+            <output>No grants yet.</output>
           ) : (
             <table className="breakdown">
               <caption>Grants</caption>
@@ -250,7 +250,7 @@ export function OperatorDesk() {
             }}
           >
             <label>
-              Grant (required)
+              <span>Grant (required)</span>
               <select value={grantId} onChange={(event) => setGrantId(event.target.value)} required>
                 {grants.length === 0 ? <option value="">No grants</option> : null}
                 {grants.map((grant) => (
