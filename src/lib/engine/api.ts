@@ -1,4 +1,4 @@
-import { engineErrorFrom, EngineRequestError } from "./errors";
+import { engineErrorFrom, EngineRequestError, isRecord } from "./errors";
 import { engineFetch, type EngineCall } from "./client";
 import type {
   AccessKey,
@@ -208,16 +208,75 @@ function allocationParams(target: AllocationTarget) {
 
 export async function provisionActor(
   call: EngineCall,
-  target: AllocationTarget & { readonly amount: string; readonly label: string },
+  target: AllocationTarget & { readonly amount: string; readonly label: string; readonly grantId?: string },
 ): Promise<ProvisionedActor> {
   const result = await call.client.POST(
     "/v1/admin/applications/{application_id}/actors/{actor_id}/allocation",
     {
       params: allocationParams(target),
-      body: { amount: { amount: target.amount, currency: "USD" }, label: target.label },
+      body: {
+        amount: { amount: target.amount, currency: "USD" },
+        label: target.label,
+        grant_id: target.grantId ?? "",
+      },
     },
   );
   return unwrap(result);
+}
+
+export type EngineGrant = {
+  readonly id: string;
+  readonly name: string;
+  readonly status: string;
+  readonly currency: string;
+  readonly total: string;
+};
+
+export async function listGrants(call: EngineCall): Promise<EngineGrant[]> {
+  const result = await call.client.GET("/v1/admin/grants");
+  if (!result.response.ok) throw engineErrorFrom(result.response.status, result.error, result.response.headers);
+  if (!Array.isArray(result.data)) throw new Error("the engine did not return a grant list");
+  return result.data.flatMap((item) => {
+    const grant = asGrant(item);
+    return grant ? [grant] : [];
+  });
+}
+
+export async function createGrant(call: EngineCall, name: string, amount: string): Promise<EngineGrant> {
+  const result = await call.client.POST("/v1/admin/grants", {
+    body: { name, amount: { amount, currency: "USD" } },
+  });
+  if (!result.response.ok) throw engineErrorFrom(result.response.status, result.error, result.response.headers);
+  const grant = asGrant(result.data);
+  if (!grant) throw new Error("the engine did not return a grant");
+  return grant;
+}
+
+export async function fundGrant(call: EngineCall, amount: string, operationRef: string): Promise<void> {
+  const result = await call.client.POST("/v1/admin/grant/fund", {
+    body: { amount: { amount, currency: "USD" }, operation_ref: operationRef },
+  });
+  await unwrap(result);
+}
+
+function asGrant(value: unknown): EngineGrant | null {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    typeof value.name !== "string" ||
+    typeof value.status !== "string" ||
+    typeof value.currency !== "string" ||
+    typeof value.total !== "string"
+  ) {
+    return null;
+  }
+  return {
+    id: value.id,
+    name: value.name,
+    status: value.status,
+    currency: value.currency,
+    total: value.total,
+  };
 }
 
 export async function fundAllocation(
@@ -351,6 +410,9 @@ export const engineHandlers = {
   "GET /v1/admin/keys": listKeys,
   "POST /v1/admin/keys": issueKey,
   "POST /v1/admin/keys/{key_id}/revoke": revokeKey,
+  "GET /v1/admin/grants": listGrants,
+  "POST /v1/admin/grants": createGrant,
+  "POST /v1/admin/grant/fund": fundGrant,
   "POST /v1/admin/applications/{application_id}/actors/{actor_id}/allocation": provisionActor,
   "POST /v1/admin/applications/{application_id}/actors/{actor_id}/allocation/fund": fundAllocation,
   "POST /v1/admin/applications/{application_id}/actors/{actor_id}/allocation/status": setAllocationStatus,

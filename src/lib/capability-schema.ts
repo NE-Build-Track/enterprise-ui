@@ -176,7 +176,10 @@ export function canonicalSchemaJson(text: string): string | null {
 export function schemaDocumentMatches(text: string, expected: string, digest: (value: string) => string): boolean {
   if (digest(text) === expected) return true;
   const canonical = canonicalSchemaJson(text);
-  return canonical !== null && digest(canonical) === expected;
+  if (canonical === null) return false;
+  // Discovery pins the publisher's canonical file, which ends with a newline.
+  // A paid job re-encodes the JSON, so that newline is gone before we hash it.
+  return digest(canonical) === expected || digest(`${canonical}\n`) === expected;
 }
 
 function registrationFromRunner(runner: unknown): Registration | null {

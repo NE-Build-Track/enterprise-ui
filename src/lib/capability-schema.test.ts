@@ -108,7 +108,11 @@ it("accepts the canonical schema bytes when a paid response re-encodes JSON", ()
   const spaced = JSON.stringify(JSON.parse(COMPOSE_TEXT) as unknown, null, 2);
   expect(schemaDocumentMatches(COMPOSE_TEXT, COMPOSE_HASH, digest)).toBe(true);
   expect(schemaDocumentMatches(spaced, COMPOSE_HASH, digest)).toBe(true);
+  const pinned = digest(`${COMPOSE_TEXT}\n`);
+  expect(schemaDocumentMatches(spaced, pinned, digest)).toBe(true);
+  expect(schemaDocumentMatches(`${COMPOSE_TEXT}\n`, pinned, digest)).toBe(true);
   expect(schemaDocumentMatches(COMPOSE_TEXT.replace('"default":4', '"default":5'), COMPOSE_HASH, digest)).toBe(false);
+  expect(schemaDocumentMatches(COMPOSE_TEXT.replace('"default":4', '"default":5'), pinned, digest)).toBe(false);
 });
 
 it("unwraps a fal endpoint schema and ignores the wrapper", () => {

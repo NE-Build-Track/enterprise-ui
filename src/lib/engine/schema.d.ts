@@ -363,6 +363,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/admin/grant/fund": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fund Grant */
+        post: operations["fund_grant_v1_admin_grant_fund_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/admin/grants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Grants */
+        get: operations["list_grants_v1_admin_grants_get"];
+        put?: never;
+        /** Create Grant */
+        post: operations["create_grant_v1_admin_grants_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -806,6 +841,11 @@ export interface components {
         ProvisionBody: {
             amount: components["schemas"]["Money-Input"];
             /**
+             * Grant Id
+             * @default
+             */
+            grant_id: string;
+            /**
              * Label
              * @default
              */
@@ -1022,6 +1062,28 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** GrantBody */
+        GrantBody: {
+            amount: components["schemas"]["Money-Input"];
+            /** Name */
+            name: string;
+        };
+        /**
+         * GrantRecord
+         * @description A Batteries grant the operator can fund actors from.
+         */
+        GrantRecord: {
+            /** Currency */
+            currency: string;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Status */
+            status: string;
+            /** Total */
+            total: string;
         };
     };
     responses: never;
@@ -1743,6 +1805,90 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Session"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fund_grant_v1_admin_grant_fund_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FundRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_grants_v1_admin_grants_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrantRecord"][];
+                };
+            };
+        };
+    };
+    create_grant_v1_admin_grants_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrantBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GrantRecord"];
                 };
             };
             /** @description Validation Error */

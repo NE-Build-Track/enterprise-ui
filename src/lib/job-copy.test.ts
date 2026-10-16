@@ -98,6 +98,12 @@ it("shows awaiting cost separately from a known USD fee", () => {
   };
   expect(formatJobCost(pending, "USD").text).toBe("Awaiting cost");
   expect(formatJobCost({ ...pending, status: "observed", fees: { fee_eth: "1", fee_usd: "2.96", row_count: 1 } }, "USD").text).toBe("$2.96");
+  expect(
+    formatJobCost(
+      { ...pending, status: "observed", fees: { fee_eth: "4.10026156E-10", fee_usd: "9.97880655857E-7", row_count: 1 } },
+      "USD",
+    ).text,
+  ).toBe("<$0.01");
   const unpriced = formatJobCost({ ...pending, status: "observed", fees: { fee_eth: "0.01", fee_usd: null, row_count: 1 } }, "USD");
   expect(unpriced.text).toBe("No USD price");
   expect(unpriced.exact).toBe("0.01 ETH");

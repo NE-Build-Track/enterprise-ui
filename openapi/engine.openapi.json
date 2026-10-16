@@ -1175,6 +1175,11 @@
           "amount": {
             "$ref": "#/components/schemas/Money-Input"
           },
+          "grant_id": {
+            "default": "",
+            "title": "Grant Id",
+            "type": "string"
+          },
           "label": {
             "default": "",
             "title": "Label",
@@ -1752,6 +1757,58 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "GrantBody": {
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/Money-Input"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "amount"
+        ],
+        "title": "GrantBody",
+        "type": "object"
+      },
+      "GrantRecord": {
+        "additionalProperties": false,
+        "description": "A Batteries grant the operator can fund actors from.",
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "status",
+          "currency",
+          "total"
+        ],
+        "title": "GrantRecord",
         "type": "object"
       }
     }
@@ -2807,6 +2864,95 @@
           }
         },
         "summary": "Open Session"
+      }
+    },
+    "/v1/admin/grant/fund": {
+      "post": {
+        "operationId": "fund_grant_v1_admin_grant_fund_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FundRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fund Grant"
+      }
+    },
+    "/v1/admin/grants": {
+      "get": {
+        "operationId": "list_grants_v1_admin_grants_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/GrantRecord"
+                  },
+                  "title": "Response List Grants V1 Admin Grants Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Grants"
+      },
+      "post": {
+        "operationId": "create_grant_v1_admin_grants_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrantBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GrantRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Grant"
       }
     }
   }
