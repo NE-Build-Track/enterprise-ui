@@ -30,7 +30,7 @@ export function JobDetail({ id }: { readonly id: string }) {
     if (!isCurrent()) return;
     const loaded = result.ok && isRecord(result.body) && isJob(result.body.job) ? result.body.job : null;
     setJob((current) => jobAfterLoad(current, requested, loaded, initial));
-    if (!loaded || loaded.id !== requested) {
+    if (loaded?.id !== requested) {
       if (initial) setCost(null);
       setError(result.ok ? "This job could not be loaded." : result.error);
       return;
