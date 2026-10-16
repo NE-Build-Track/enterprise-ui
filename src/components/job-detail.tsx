@@ -57,6 +57,18 @@ export function JobDetail({ id }: { readonly id: string }) {
     };
   }, [id, load]);
 
+  useEffect(() => {
+    if (job?.id !== id) return;
+    if (job.state !== "running" && job.state !== "queued") return;
+    const ticket = generation.current;
+    let active = true;
+    const timer = setInterval(() => void load(id, () => active && generation.current === ticket, false), 3_000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [id, job, load]);
+
   const repeat = useCallback(
     async (current: Job) => {
       if (repeatingRef.current) return;
@@ -107,16 +119,17 @@ export function JobDetail({ id }: { readonly id: string }) {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ quantities }),
-      }).then((result) => {
+      }).then(async (result) => {
         if (generation.current !== ticket) return;
         if (!result.ok) {
           setUsageError(result.error);
           return;
         }
         setUsageError("");
+        await load(requested, () => generation.current === ticket, false);
       });
     },
-    [job, repeat],
+    [job, load, repeat],
   );
 
   const printed = useSyncExternalStore(subscribeJobResults, () => recallJobResultSnapshot(id), () => null);

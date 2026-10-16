@@ -11,7 +11,7 @@ import { formatWindow, jobTitle, periodSpendUsd } from "@/lib/job-copy";
 import { billingCostJobs, inWindow, jobsForClass } from "@/lib/job-history";
 import { feePositive, formatDisplayMoney, formatUsdDisplay } from "@/lib/money";
 
-import { useConsoleData } from "./use-console";
+import { useConsoleData, useJobCosts } from "./use-console";
 
 const CLASS_LABELS: Record<CostClass, string> = {
   delivered: "Delivered",
@@ -32,10 +32,15 @@ export function Billing() {
   }, [data.end, data.jobs, data.start]);
   const priced = billingCostJobs(windowJobs);
   const pricedJobs = priced.jobs;
-  const costs = data.costs;
+  const costRevision = pricedJobs.map((job) => `${job.id}\t${job.state}\t${job.completed_at ?? ""}`).join("\n");
+  const { costs, costsError } = useJobCosts(
+    pricedJobs.map((job) => job.id),
+    costRevision,
+  );
   const loadedCount = pricedJobs.filter((job) => costs.has(job.id)).length;
   const costsReady = pricedJobs.length === 0 || loadedCount === pricedJobs.length;
-  const outside = priced.truncated;
+  const unloaded = pricedJobs.some((job) => costs.has(job.id) && costs.get(job.id) === null);
+  const outside = priced.truncated || unloaded;
 
   const onRange = (detail: unknown) => {
     if (!isRecord(detail) || detail._tag !== "RangeChanged") return;
@@ -122,6 +127,7 @@ export function Billing() {
           ) : (
             <p>Unattributed is spend that was not tied to a job.</p>
           )}
+          {costsError ? <p role="alert">{costsError}</p> : null}
           {outside ? <p>Some jobs in this period are outside the loaded cost detail.</p> : null}
         </article>
         <article className="panel">
