@@ -263,7 +263,7 @@ it("posts a job and treats a 409 as the same job", () => {
   expect(failed.state.conflict).toBe(true);
   expect(failed.state.countdown).toBe(5);
   expect(outputsIn(failed.commands)).toEqual([
-    { _tag: "JobCompleted", jobId: "job-1", conflict: true, operationRef: "ref-1", request: built.value, result: null },
+    { _tag: "JobCompleted", jobId: "job-1", conflict: true, failed: true, operationRef: "ref-1", request: built.value, result: null },
   ]);
 });
 
@@ -448,6 +448,7 @@ it("names the estimate and opens the finished job", () => {
       _tag: "JobCompleted",
       jobId: "job-1",
       conflict: false,
+      failed: false,
       operationRef: "ref-1",
       request: built.ok ? built.value : null,
       result: null,
@@ -470,6 +471,7 @@ it("carries the runner result onto the finished job", () => {
       _tag: "JobCompleted",
       jobId: "job-1",
       conflict: false,
+      failed: false,
       operationRef: "ref-1",
       request: built.ok ? built.value : null,
       result: { body: "{\"ok\":true}", contentType: "application/json" },

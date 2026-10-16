@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   description: "Job status, output, and recovery.",
 };
 
-type Props = { params: Promise<{ id: string }> };
+type Props = { readonly params: Promise<{ readonly id: string }> };
 
 export default async function JobPage({ params }: Props) {
   await requirePageSession();

@@ -23,7 +23,8 @@
   input,
   button,
   textarea,
-  select {
+  select,
+  output {
     font: inherit;
     color: inherit;
   }
@@ -688,7 +689,12 @@
     overflow-y: hidden;
   }
 
+  output {
+    display: block;
+  }
+
   .note,
+  output,
   [role="status"] {
     color: var(--text-muted);
   }

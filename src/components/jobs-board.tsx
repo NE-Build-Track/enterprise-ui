@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useMemo, type FormEvent } from "react";
+import { useMemo, type FormEvent, type ReactNode } from "react";
 
 import { GyralElement } from "@/components/GyralElement";
 import { loadJobList } from "@/gyral/loaders";
@@ -14,6 +14,15 @@ import { useConsoleData, useJobCosts } from "./use-console";
 
 const STATES: readonly Job["state"][] = ["queued", "running", "succeeded", "failed", "uncertain"];
 
+function fieldText(form: FormData, key: string): string {
+  const value = form.get(key);
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function FilterControl({ label, children }: { readonly label: string; readonly children: ReactNode }) {
+  return <label>{label}{children}</label>;
+}
+
 export function JobsBoard() {
   const data = useConsoleData();
   const params = useSearchParams();
@@ -23,8 +32,15 @@ export function JobsBoard() {
   const filtered = useMemo(() => filterJobs(data.jobs, filters), [data.jobs, filters]);
   const page = paginate(filtered, filters.page, JOB_PAGE_SIZE);
   const currency = billingCurrency(data.allowance?.available, data.allowance?.spent, data.allowance?.granted);
-  const costs = useJobCosts(page.items.map((job) => job.id));
-  const apps = useMemo(() => [...new Set(data.jobs.map((job) => job.app))].sort(), [data.jobs]);
+  const costRevision = page.items.map((job) => `${job.id}\t${job.state}\t${job.completed_at ?? ""}`).join("\n");
+  const costs = useJobCosts(
+    page.items.map((job) => job.id),
+    costRevision,
+  );
+  const apps = useMemo(
+    () => [...new Set(data.jobs.map((job) => job.app))].sort((left, right) => left.localeCompare(right)),
+    [data.jobs],
+  );
   const costList = page.items.flatMap((job) => {
     const cost = costs.get(job.id);
     return cost ? [cost] : [];
@@ -35,7 +51,7 @@ export function JobsBoard() {
     const form = new FormData(event.currentTarget);
     const next = new URLSearchParams();
     for (const key of ["q", "state", "app", "from", "to"] as const) {
-      const value = String(form.get(key) ?? "").trim();
+      const value = fieldText(form, key);
       if (value) next.set(key, value);
     }
     const ids = params.get("ids");
@@ -60,40 +76,25 @@ export function JobsBoard() {
       </hgroup>
       <search className="panel filters">
         <form key={params.toString()} onSubmit={apply}>
-          <label>
-            Search
-            <input name="q" defaultValue={filters.q} placeholder="Name or ID" />
-          </label>
-          <label>
-            Status
-            <select name="state" defaultValue={filters.state}>
+          <FilterControl label="Search"><input name="q" defaultValue={filters.q} placeholder="Name or ID" /></FilterControl>
+          <FilterControl label="Status"><select name="state" defaultValue={filters.state}>
               <option value="">Any status</option>
               {STATES.map((state) => (
                 <option key={state} value={state}>
                   {jobStateLabel(state)}
                 </option>
               ))}
-            </select>
-          </label>
-          <label>
-            Task
-            <select name="app" defaultValue={filters.app}>
+            </select></FilterControl>
+          <FilterControl label="Task"><select name="app" defaultValue={filters.app}>
               <option value="">Any task</option>
               {apps.map((app) => (
                 <option key={app} value={app}>
                   {app}
                 </option>
               ))}
-            </select>
-          </label>
-          <label>
-            From
-            <input name="from" type="date" defaultValue={filters.from} />
-          </label>
-          <label>
-            To
-            <input name="to" type="date" defaultValue={filters.to} />
-          </label>
+            </select></FilterControl>
+          <FilterControl label="From"><input name="from" type="date" defaultValue={filters.from} /></FilterControl>
+          <FilterControl label="To"><input name="to" type="date" defaultValue={filters.to} /></FilterControl>
           <button type="submit">Apply</button>
         </form>
       </search>
@@ -102,8 +103,8 @@ export function JobsBoard() {
         {data.loaded ? `${filtered.length} jobs. Page ${page.page} of ${page.pages}.` : "Loading jobs"}
       </p>
       {data.jobsError ? <p role="alert">{data.jobsError}</p> : null}
-      {data.loaded && filtered.length === 0 ? (
-        <p role="status">{data.jobs.length === 0 ? "No jobs yet." : "No jobs match these filters."}</p>
+      {data.loaded && !data.jobsError && filtered.length === 0 ? (
+        <output>{data.jobs.length === 0 ? "No jobs yet." : "No jobs match these filters."}</output>
       ) : null}
       {data.loaded && filtered.length > 0 ? (
         <GyralElement

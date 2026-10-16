@@ -160,7 +160,8 @@ export function formatDuration(startIso: string, endIso: string | null, now = Da
 
 export function lastUpdate(job: Job): string {
   const times = job.attempts.flatMap((attempt) => [attempt.ended_at, attempt.started_at].filter((value): value is string => Boolean(value)));
-  return times.sort().at(-1) ?? job.created_at;
+  const latest = times.toSorted((left, right) => left.localeCompare(right)).at(-1);
+  return latest ?? job.created_at;
 }
 
 export function billingCurrency(available: Money | null | undefined, spent: Money | null | undefined, granted: Money | null | undefined): BillingCurrency {
@@ -174,7 +175,8 @@ export function formatJobCost(cost: JobCost | null | undefined, currency: Billin
     return { text: exact, exact };
   }
   if (cost.fees.fee_usd === null || cost.fees.fee_usd === "") {
-    return { text: "Awaiting cost", exact: cost.fees.fee_eth ? `${cost.fees.fee_eth} ETH` : "" };
+    const exact = cost.fees.fee_eth ? `${cost.fees.fee_eth} ETH` : "";
+    return { text: "No USD price", exact };
   }
   return formatDisplayMoney({ amount: cost.fees.fee_usd, currency: "USD" });
 }
@@ -182,8 +184,8 @@ export function formatJobCost(cost: JobCost | null | undefined, currency: Billin
 export function periodSpendUsd(summary: CostSummary | null): string | null {
   if (!summary) return null;
   const amounts = PERIOD_SPEND.map((name) => summary.by_class[name]?.fee_usd ?? null);
-  if (amounts.every((amount) => amount === null)) return null;
-  return sumDecimals(amounts.map((amount) => amount ?? "0"));
+  if (amounts.some((amount) => amount === null || amount === "")) return null;
+  return sumDecimals(amounts);
 }
 
 export function reconciliationCopy(balanced: boolean | null): { readonly label: string; readonly tone: "ok" | "bad" | "wait"; readonly detail: string } {

@@ -37,6 +37,8 @@ it("formats familiar USD amounts and keeps the exact decimal", () => {
   expect(formatUsdDisplay("0.1234")).toEqual({ text: "$0.1234", exact: "0.1234 USD" });
   expect(formatUsdDisplay("0.004")).toEqual({ text: "<$0.01", exact: "0.004 USD" });
   expect(formatUsdDisplay("0")).toEqual({ text: "$0.00", exact: "0 USD" });
+  expect(formatUsdDisplay("12345.6")).toEqual({ text: "$12,345.60", exact: "12345.6 USD" });
+  expect(formatUsdDisplay("-1234")).toEqual({ text: "-$1,234.00", exact: "-1234 USD" });
   expect(formatDisplayMoney({ amount: "2.96", currency: "USD" }).text).toBe("$2.96");
   expect(formatDisplayMoney(null)).toEqual({ text: "Pending", exact: "" });
 });
