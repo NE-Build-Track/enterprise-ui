@@ -53,8 +53,17 @@ export function useConsoleData() {
 
   const refreshJobs = useCallback(async () => {
     const result = await api(`/api/jobs?limit=${JOB_LIST_LIMIT}`);
-    setJobs((current) => unchanged(current, result.ok && isJobs(result.body) ? result.body : []));
-    setJobsError(result.ok ? "" : result.error);
+    if (!result.ok) {
+      setJobsError(result.error);
+      return;
+    }
+    if (!isJobs(result.body)) {
+      setJobsError("Jobs could not be loaded.");
+      return;
+    }
+    const next = result.body;
+    setJobs((current) => unchanged(current, next));
+    setJobsError("");
   }, []);
 
   const refreshSummary = useCallback(async () => {
@@ -125,24 +134,72 @@ export function useConsoleData() {
 export function useJobCosts(ids: readonly string[], revision: string): ReadonlyMap<string, JobCost | null> {
   const idKey = ids.join("\n");
   const [costs, setCosts] = useState<ReadonlyMap<string, JobCost | null>>(new Map());
+  const seen = useRef(new Map<string, string>());
 
   useEffect(() => {
     const jobIds = idKey ? idKey.split("\n") : [];
-    if (jobIds.length === 0) return;
+    const allowed = new Set(jobIds);
+    const revisions = seen.current;
+    const pending = costIdsToFetch(jobIds, revision, revisions);
+    if (pending.length === 0) return;
+    const lines = revisionLines(revision);
+    for (const id of pending) revisions.set(id, lines.get(id) ?? "");
     let cancelled = false;
-    void Promise.all(
-      jobIds.map(async (id) => {
-        const result = await api(`/api/jobs/${encodeURIComponent(id)}/cost`);
-        const cost = result.ok && isJobCost(result.body) ? result.body : null;
-        return [id, cost] as const;
-      }),
-    ).then((rows) => {
-      if (!cancelled) setCosts(new Map(rows));
+    void Promise.all(pending.map(fetchJobCost)).then((rows) => {
+      if (cancelled) return;
+      setCosts((current) => {
+        const next = new Map<string, JobCost | null>();
+        for (const [id, cost] of current) {
+          if (allowed.has(id)) next.set(id, cost);
+        }
+        for (const [id, cost] of rows) {
+          if (allowed.has(id)) next.set(id, cost);
+        }
+        return next;
+      });
     });
     return () => {
       cancelled = true;
+      for (const id of pending) revisions.delete(id);
     };
   }, [idKey, revision]);
 
-  return costs;
+  const allowed = new Set(idKey ? idKey.split("\n") : []);
+  return retainCosts(costs, allowed);
+}
+
+function revisionLines(revision: string): ReadonlyMap<string, string> {
+  const lines = new Map<string, string>();
+  for (const line of revision.split("\n")) {
+    if (!line) continue;
+    const tab = line.indexOf("\t");
+    lines.set(tab === -1 ? line : line.slice(0, tab), line);
+  }
+  return lines;
+}
+
+function costIdsToFetch(ids: readonly string[], revision: string, seen: ReadonlyMap<string, string>): readonly string[] {
+  const lines = revisionLines(revision);
+  return ids.filter((id) => seen.get(id) !== lines.get(id));
+}
+
+function retainCosts(
+  current: ReadonlyMap<string, JobCost | null>,
+  allowed: ReadonlySet<string>,
+): ReadonlyMap<string, JobCost | null> {
+  for (const id of current.keys()) {
+    if (!allowed.has(id)) {
+      const next = new Map<string, JobCost | null>();
+      for (const [kept, cost] of current) {
+        if (allowed.has(kept)) next.set(kept, cost);
+      }
+      return next;
+    }
+  }
+  return current;
+}
+
+async function fetchJobCost(id: string): Promise<readonly [string, JobCost | null]> {
+  const result = await api(`/api/jobs/${encodeURIComponent(id)}/cost`);
+  return [id, result.ok && isJobCost(result.body) ? result.body : null];
 }

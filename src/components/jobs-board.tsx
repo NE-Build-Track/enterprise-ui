@@ -99,9 +99,9 @@ export function JobsBoard() {
         </form>
       </search>
       {data.jobs.length >= JOB_LIST_LIMIT ? <p>History is capped at {JOB_LIST_LIMIT} jobs.</p> : null}
-      <p>
-        {data.loaded ? `${filtered.length} jobs. Page ${page.page} of ${page.pages}.` : "Loading jobs"}
-      </p>
+      {data.jobsError ? null : (
+        <p>{data.loaded ? `${filtered.length} jobs. Page ${page.page} of ${page.pages}.` : "Loading jobs"}</p>
+      )}
       {data.jobsError ? <p role="alert">{data.jobsError}</p> : null}
       {data.loaded && !data.jobsError && filtered.length === 0 ? (
         <output>{data.jobs.length === 0 ? "No jobs yet." : "No jobs match these filters."}</output>
