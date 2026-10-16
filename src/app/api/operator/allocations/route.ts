@@ -29,7 +29,9 @@ export async function POST(request: Request): Promise<Response> {
       const amount = usdAmount(body.amount);
       if (!amount) return Response.json({ error: "amount must be a USD decimal" }, { status: 400 });
       const label = typeof body.label === "string" ? body.label.trim() : "";
-      return Response.json(await provisionActor(call, { ...target, amount, label }));
+      const grantId = typeof body.grantId === "string" ? body.grantId.trim() : "";
+      if (!grantId) return Response.json({ error: "choose a grant" }, { status: 400 });
+      return Response.json(await provisionActor(call, { ...target, amount, label, grantId }));
     }
     if (body.action === "fund") {
       const amount = usdAmount(body.amount);

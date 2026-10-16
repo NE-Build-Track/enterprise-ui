@@ -21,6 +21,7 @@ export function JobDetail({ id }: { readonly id: string }) {
   const [usageError, setUsageError] = useState("");
   const [repeating, setRepeating] = useState(false);
   const [currency, setCurrency] = useState<BillingCurrency>("USD");
+  const [printed, setPrinted] = useState<StoredJobResult | null>(null);
   const repeatingRef = useRef(false);
 
   const load = useCallback(async () => {
@@ -32,6 +33,10 @@ export function JobDetail({ id }: { readonly id: string }) {
     setJob(result.body.job);
     setCost(isJobCost(result.body.cost) ? result.body.cost : null);
     setError("");
+  }, [id]);
+
+  useEffect(() => {
+    setPrinted(recallJobResult(id));
   }, [id]);
 
   useEffect(() => {
@@ -110,7 +115,6 @@ export function JobDetail({ id }: { readonly id: string }) {
     [job, load, repeat],
   );
 
-  const printed = recallJobResult(id);
   const storedFile = job?.result?.storage === "stored";
   const showResult = printed !== null || job?.state === "succeeded" || storedFile;
 

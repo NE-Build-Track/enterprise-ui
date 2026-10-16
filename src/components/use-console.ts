@@ -13,6 +13,7 @@ const isJobs = listOf(isJob);
 const isOfferings = listOf(isOffering);
 const JOB_POLL_MS = 3_000;
 const SUMMARY_POLL_MS = 30_000;
+const COST_POLL_MS = 30_000;
 
 function unchanged<T>(current: T, next: T): T {
   return JSON.stringify(current) === JSON.stringify(next) ? current : next;
@@ -123,6 +124,11 @@ export function useConsoleData() {
   };
 }
 
+/** True once a cost is observed, corrected, or any status other than none or pending. */
+export function costSettled(cost: JobCost | null): boolean {
+  return cost !== null && cost.status !== "none" && cost.status !== "pending";
+}
+
 export function useJobCosts(ids: readonly string[]): ReadonlyMap<string, JobCost | null> {
   const key = ids.join("\n");
   const [costs, setCosts] = useState<ReadonlyMap<string, JobCost | null>>(new Map());
@@ -131,17 +137,37 @@ export function useJobCosts(ids: readonly string[]): ReadonlyMap<string, JobCost
     const jobIds = key ? key.split("\n") : [];
     if (jobIds.length === 0) return;
     let cancelled = false;
-    void Promise.all(
-      jobIds.map(async (id) => {
-        const result = await api(`/api/jobs/${id}`);
-        const cost = result.ok && isRecord(result.body) && isJobCost(result.body.cost) ? result.body.cost : null;
-        return [id, cost] as const;
-      }),
-    ).then((rows) => {
-      if (!cancelled) setCosts(new Map(rows));
-    });
+    let generation = 0;
+    let timer: ReturnType<typeof setInterval> | undefined;
+
+    const load = () => {
+      const request = ++generation;
+      void Promise.all(
+        jobIds.map(async (id) => {
+          const result = await api(`/api/jobs/${id}`);
+          const cost = result.ok && isRecord(result.body) && isJobCost(result.body.cost) ? result.body.cost : null;
+          return [id, cost] as const;
+        }),
+      ).then((rows) => {
+        if (cancelled || request !== generation) return;
+        setCosts(new Map(rows));
+        if (rows.every(([, cost]) => costSettled(cost)) && timer) {
+          clearInterval(timer);
+          timer = undefined;
+        }
+      });
+    };
+
+    load();
+    timer = setInterval(load, COST_POLL_MS);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") load();
+    };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       cancelled = true;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [key]);
 

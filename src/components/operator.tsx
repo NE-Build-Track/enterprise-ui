@@ -7,6 +7,7 @@ import { GyralElement } from "@/components/GyralElement";
 import { api } from "@/lib/client-api";
 import type { ActorSnapshot } from "@/lib/attribution";
 import { isRecord } from "@/lib/engine/errors";
+import type { EngineGrant } from "@/lib/engine/api";
 import type { AccessKey, Job, JobCost, ProvisionedActor, SyncReport } from "@/lib/engine/types";
 import { isAccessKey, isActorSnapshot, isJob, isJobCost, listOf } from "@/gyral/guards";
 import { loadActorTable, loadJobTimeline, loadKeyTable } from "@/gyral/loaders";
@@ -22,6 +23,11 @@ export function OperatorDesk() {
   const [issued, setIssued] = useState<{ token: string; actorId: string } | null>(null);
   const [sync, setSync] = useState<SyncReport | null>(null);
   const [selected, setSelected] = useState<{ job: Job; cost: JobCost | null } | null>(null);
+  const [grants, setGrants] = useState<readonly EngineGrant[]>([]);
+  const [grantId, setGrantId] = useState("");
+  const [grantName, setGrantName] = useState("");
+  const [grantAmount, setGrantAmount] = useState("100");
+  const [grantError, setGrantError] = useState("");
   const [actorId, setActorId] = useState("");
   const [amount, setAmount] = useState("1");
   const [label, setLabel] = useState("");
@@ -31,10 +37,18 @@ export function OperatorDesk() {
   const [confirmRevoke, setConfirmRevoke] = useState(false);
 
   const refresh = useCallback(async () => {
-    const [keyResult, actorResult] = await Promise.all([api("/api/operator/keys"), api("/api/operator/actors")]);
+    const [keyResult, actorResult, grantResult] = await Promise.all([
+      api("/api/operator/keys"),
+      api("/api/operator/actors"),
+      api("/api/operator/grants"),
+    ]);
     setKeys(keyResult.ok && isKeys(keyResult.body) ? keyResult.body : []);
     setActors(actorResult.ok && isActors(actorResult.body) ? actorResult.body : []);
+    const nextGrants = grantResult.ok && Array.isArray(grantResult.body) ? grantResult.body.filter(isGrant) : [];
+    setGrants(nextGrants);
+    setGrantId((current) => (nextGrants.some((grant) => grant.id === current) ? current : (nextGrants[0]?.id ?? "")));
     setError(keyResult.ok ? (actorResult.ok ? "" : actorResult.error) : keyResult.error);
+    if (!grantResult.ok) setGrantError(grantResult.error);
   }, []);
 
   useEffect(() => {
@@ -118,7 +132,7 @@ export function OperatorDesk() {
 
   async function allocationCommand(
     action: "provision" | "fund" | "pause" | "resume" | "revoke" | "rotate",
-    payload: { actorId: string; amount?: string; label?: string },
+    payload: { actorId: string; amount?: string; label?: string; grantId?: string },
   ): Promise<void> {
     const result = await api("/api/operator/allocations", {
       method: "POST",
@@ -159,15 +173,93 @@ export function OperatorDesk() {
       </hgroup>
       <div className="board">
         <article className="panel wide">
-          <h2>Allocations</h2>
-          <p>The actor id is the name you choose. Provisioning draws from the shared grant and does not create a login key.</p>
+          <h2>Grants</h2>
+          <p>Actors are funded from a grant you choose. Create a grant here, then provision an actor against it.</p>
           <form
             className="cluster"
             onSubmit={(event) => {
               event.preventDefault();
-              void allocationCommand("provision", { actorId, amount, label });
+              void api("/api/operator/grants", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ name: grantName, amount: grantAmount }),
+              }).then(async (result) => {
+                if (!result.ok) {
+                  setGrantError(result.error);
+                  return;
+                }
+                setGrantName("");
+                setGrantError("");
+                await refresh();
+              });
             }}
           >
+            <label>
+              Grant name (required)
+              <input value={grantName} onChange={(event) => setGrantName(event.target.value)} required autoComplete="off" />
+            </label>
+            <label>
+              Amount USD (required)
+              <input
+                value={grantAmount}
+                onChange={(event) => setGrantAmount(event.target.value)}
+                inputMode="decimal"
+                required
+                autoComplete="off"
+              />
+            </label>
+            <button type="submit">Create grant</button>
+          </form>
+          {grantError ? <p role="alert">{grantError}</p> : null}
+          {grants.length === 0 ? (
+            <p role="status">No grants yet.</p>
+          ) : (
+            <table className="breakdown">
+              <caption>Grants</caption>
+              <thead>
+                <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Total</th>
+                  <th scope="col">Id</th>
+                </tr>
+              </thead>
+              <tbody>
+                {grants.map((grant) => (
+                  <tr key={grant.id}>
+                    <th scope="row">{grant.name}</th>
+                    <td>{grant.status}</td>
+                    <td>
+                      {grant.total} {grant.currency}
+                    </td>
+                    <td>
+                      <code>{grant.id}</code>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+          <h2>Allocations</h2>
+          <p>The actor id is the name you choose. Provisioning draws from the selected grant and does not create a login key.</p>
+          <form
+            className="cluster"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void allocationCommand("provision", { actorId, amount, label, grantId });
+            }}
+          >
+            <label>
+              Grant (required)
+              <select value={grantId} onChange={(event) => setGrantId(event.target.value)} required>
+                {grants.length === 0 ? <option value="">No grants</option> : null}
+                {grants.map((grant) => (
+                  <option key={grant.id} value={grant.id}>
+                    {grant.name}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label>
               Actor id (required)
               <input value={actorId} onChange={(event) => setActorId(event.target.value)} required autoComplete="off" spellCheck={false} />
@@ -255,6 +347,10 @@ export function OperatorDesk() {
       </div>
     </>
   );
+}
+
+function isGrant(value: unknown): value is EngineGrant {
+  return isRecord(value) && typeof value.id === "string" && typeof value.name === "string";
 }
 
 function isProvisioned(value: unknown): value is ProvisionedActor {
