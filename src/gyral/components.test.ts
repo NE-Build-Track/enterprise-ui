@@ -19,6 +19,9 @@ const runner: RunnerState = {
   payloadText: "",
   prefilled: false,
   editor: "fields",
+  editorChosen: false,
+  editorNote: "",
+  fieldErrors: {},
   schemaPhase: "idle",
   schemaJson: "",
   requiredKeys: [],
@@ -37,6 +40,7 @@ const runner: RunnerState = {
   jobId: null,
   conflict: false,
   offeringChosen: false,
+  query: "",
 };
 
 const offering = {
@@ -259,23 +263,58 @@ it("posts a job and treats a 409 as the same job", () => {
   expect(failed.state.conflict).toBe(true);
   expect(failed.state.countdown).toBe(5);
   expect(outputsIn(failed.commands)).toEqual([
-    { _tag: "JobCompleted", jobId: "job-1", conflict: true, operationRef: "ref-1" },
+    { _tag: "JobCompleted", jobId: "job-1", conflict: true, operationRef: "ref-1", request: built.value, result: null },
   ]);
 });
 
-it("gives every run a new operation ref and reuses it on retry", () => {
+it("gives every run a new operation ref and ignores a second click while running", () => {
   const first = step(JobRunner.spec, runner, { _tag: "Run" });
   const firstCall = inputsFor(first.commands, http)[0];
   expect(firstCall).toMatchObject({ body: { operation_ref: first.state.operationRef } });
   expect(first.state.operationRef).not.toBe(runner.operationRef);
 
-  const second = step(JobRunner.spec, first.state, { _tag: "Run" });
-  const secondCall = inputsFor(second.commands, http)[0];
-  expect(secondCall).toMatchObject({ body: { operation_ref: second.state.operationRef } });
-  expect(second.state.operationRef).not.toBe(first.state.operationRef);
+  const ignored = step(JobRunner.spec, first.state, { _tag: "Run" });
+  expect(ignored.state.operationRef).toBe(first.state.operationRef);
+  expect(inputsFor(ignored.commands, http)).toHaveLength(0);
 
-  const retried = step(JobRunner.spec, second.state, { _tag: "Retry" });
-  expect(inputsFor(retried.commands, http)[0]).toMatchObject({ body: { operation_ref: second.state.operationRef } });
+  const finished = step(JobRunner.spec, first.state, {
+    _tag: "Finished",
+    status: 200,
+    contentType: "application/json",
+    body: "",
+    jobId: "job-1",
+  });
+  const second = step(JobRunner.spec, finished.state, { _tag: "Run" });
+  expect(second.state.operationRef).not.toBe(first.state.operationRef);
+  expect(inputsFor(second.commands, http)[0]).toMatchObject({ body: { operation_ref: second.state.operationRef } });
+});
+
+it("keeps entered values when a required field is missing", () => {
+  const state = {
+    ...runner,
+    app: "comfystream/ffmpeg-images-to-video",
+    schemaPhase: "ready" as const,
+    requiredKeys: ["images"],
+    payloadText: JSON.stringify({ fps: 4 }),
+  };
+  const next = step(JobRunner.spec, state, { _tag: "Run" });
+  expect(next.state.payloadText).toBe(state.payloadText);
+  expect(next.state.fieldErrors.images).toBe("images is required");
+  expect(next.state.phase).toBe("failed");
+});
+
+it("stays on JSON when the payload cannot be shown as fields", () => {
+  const state = {
+    ...runner,
+    editor: "json" as const,
+    schemaPhase: "ready" as const,
+    schemaJson: JSON.stringify({ type: "object", required: ["fps"], properties: { fps: { type: "number" } } }),
+    payloadText: JSON.stringify({ fps: { bad: true } }),
+  };
+  const next = step(JobRunner.spec, state, { _tag: "Editor", value: "fields" });
+  expect(next.state.editor).toBe("json");
+  expect(next.state.editorNote).toContain("fps");
+  expect(next.state.payloadText).toBe(state.payloadText);
 });
 
 it("rejects a payload that is not an object", () => {
@@ -357,55 +396,126 @@ it("emits a cost range from the inputs", () => {
   expect(html).toContain("bar wide");
 });
 
-it("shows each job in columns with the operation ref on the next row", () => {
+it("shows each job with a status label and a details link", () => {
+  const html = renderToString(
+    viewOf(JobList, {}, {
+      props: {
+        jobs: [
+          {
+            id: "job-1",
+            actor_id: "ada",
+            application_id: "default",
+            app: "comfystream/ffmpeg-compose",
+            attempts: [],
+            capability: null,
+            completed_at: null,
+            created_at: "2026-10-14T22:41:00.000Z",
+            failure: null,
+            mode: "immediate",
+            model: null,
+            operation_ref: "probe-2c962d89-162d-41e1-9aeb-c880c3e131f7",
+            result: null,
+            state: "uncertain",
+            usage: null,
+          },
+        ],
+        error: "",
+        currency: "USD",
+        costs: [],
+      },
+    }),
+    { dev: false },
+  );
+  expect(html).toContain(">Job<");
+  expect(html).toContain(">Status<");
+  expect(html).toContain(">Submitted<");
+  expect(html).toContain("Compose media");
+  expect(html).toContain("Uncertain");
+  expect(html).toContain("Awaiting cost");
+  expect(html).toContain("View details");
+  expect(html).toContain('datetime="2026-10-14T22:41:00.000Z"');
+  expect(html).not.toContain("Retry last job");
+});
+
+it("names the estimate and opens the finished job", () => {
+  const html = renderToString(viewOf(JobRunner, runner, { props: { offerings: [], remembered: null } }), { dev: false });
+  expect(html).toContain("Estimate unavailable");
+  expect(html).not.toContain("Retry last job");
+  const viewed = step(JobRunner.spec, { ...runner, jobId: "job-1" }, { _tag: "View" });
+  const built = jobBody({ ...runner, jobId: "job-1" });
+  expect(outputsIn(viewed.commands)).toEqual([
+    {
+      _tag: "JobCompleted",
+      jobId: "job-1",
+      conflict: false,
+      operationRef: "ref-1",
+      request: built.ok ? built.value : null,
+      result: null,
+    },
+  ]);
+});
+
+it("carries the runner result onto the finished job", () => {
+  const state = { ...runner, phase: "running" as const };
+  const built = jobBody(state);
+  const finished = step(JobRunner.spec, state, {
+    _tag: "Finished",
+    status: 200,
+    contentType: "application/json",
+    body: "{\"ok\":true}",
+    jobId: "job-1",
+  });
+  expect(outputsIn(finished.commands)).toEqual([
+    {
+      _tag: "JobCompleted",
+      jobId: "job-1",
+      conflict: false,
+      operationRef: "ref-1",
+      request: built.ok ? built.value : null,
+      result: { body: "{\"ok\":true}", contentType: "application/json" },
+    },
+  ]);
+});
+
+it("explains a failed job and offers run again", () => {
   const html = renderToString(
     viewOf(
-      JobList,
-      { selectedId: "" },
+      JobTimeline,
+      { name: "", amount: "", formError: "" },
       {
         props: {
-          jobs: [
-            {
-              id: "job-1",
-              actor_id: "ada",
-              application_id: "default",
-              app: "comfy-stream/fal-benini-z-edit",
-              attempts: [],
-              capability: null,
-              completed_at: null,
-              created_at: "2026-10-14T22:41:00.000Z",
-              failure: null,
-              mode: "immediate",
-              model: null,
-              operation_ref: "probe-2c962d89-162d-41e1-9aeb-c880c3e131f7",
-              result: null,
-              state: "uncertain",
-              usage: null,
-            },
-          ],
+          job: {
+            id: "job-1",
+            actor_id: "ada",
+            application_id: "default",
+            app: "comfystream/ffmpeg-compose",
+            attempts: [],
+            capability: null,
+            completed_at: "2026-10-14T22:42:00.000Z",
+            created_at: "2026-10-14T22:41:00.000Z",
+            failure: { kind: "runner_error", message: "encoder exited", payment_sent: false },
+            mode: "immediate",
+            model: null,
+            operation_ref: "ref-1",
+            result: null,
+            state: "failed",
+            usage: null,
+          },
+          cost: null,
           error: "",
-          selectedId: "job-1",
+          usageError: "",
+          currency: "USD",
+          repeat: true,
+          repeating: false,
         },
       },
     ),
     { dev: false },
   );
-  expect(html).toContain(">App<");
-  expect(html).toContain(">State<");
-  expect(html).toContain(">Created<");
-  expect(html).toContain("Operation ref");
-  expect(html).toContain('colspan="3"');
-  expect(html).toContain("probe-2c962d89-162d-41e1-9aeb-c880c3e131f7");
-  expect(html).toContain('data-selected="true"');
-});
-
-it("names the retry action and opens the finished job", () => {
-  const html = renderToString(viewOf(JobRunner, runner, { props: { offerings: [], remembered: null } }), { dev: false });
-  expect(html).toContain("Retry last job");
-  const viewed = step(JobRunner.spec, { ...runner, jobId: "job-1" }, { _tag: "View" });
-  expect(outputsIn(viewed.commands)).toEqual([
-    { _tag: "JobCompleted", jobId: "job-1", conflict: false, operationRef: "ref-1" },
-  ]);
+  expect(html).toContain("The runner failed while working.");
+  expect(html).toContain("new charge");
+  expect(html).toContain("Run again");
+  expect(html).toContain("Technical details");
 });
 
 it("refuses usage without a quantity", () => {

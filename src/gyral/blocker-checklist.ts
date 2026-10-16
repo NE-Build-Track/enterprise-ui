@@ -216,7 +216,7 @@ export const BlockerChecklist = define<State, Msg, Props, BlockerOutput>()("lp-b
     SpendBefore: (s, m, ctx) =>
       ctx.props.repeatApp
         ? [{ ...s, spendBefore: m.amount }, [repeatJob(ctx.props.repeatApp, ctx.props.repeatRef, "first")]]
-        : { ...s, repeatPhase: "failed", repeatError: "Choose an offering on the dashboard before the repeat check.", spendBefore: m.amount },
+        : { ...s, repeatPhase: "failed", repeatError: "Choose a task on New job before the repeat check.", spendBefore: m.amount },
     RepeatStatus: (s, m, ctx) => {
       if (m.which === "first") {
         return [
@@ -259,7 +259,7 @@ export const BlockerChecklist = define<State, Msg, Props, BlockerOutput>()("lp-b
     const rejected = failedAfterPayment(reconciliations);
     const health = ctx.props.health;
     return html`
-      <h2>ISS-04 checks</h2>
+      <h2>Release checks</h2>
       <p>
         Pinned engine <code>${baselinePins.engine}</code>, <abbr title="software development kit">SDK</abbr>
         <code>${baselinePins.sdk}</code>, Batteries <code>${baselinePins.batteries}</code>, signer

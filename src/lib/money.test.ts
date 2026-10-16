@@ -1,6 +1,6 @@
 import { expect, it } from "vitest";
 
-import { formatMoney, formatTime, formatUsd, percentWidth, sameAmount, sumDecimals } from "./money";
+import { formatDisplayMoney, formatMoney, formatTime, formatUsd, formatUsdDisplay, percentWidth, sameAmount, sumDecimals } from "./money";
 
 it("keeps a missing amount pending and a null USD price unlabeled", () => {
   expect(formatMoney(null)).toBe("pending");
@@ -29,6 +29,16 @@ it("formats an instant as a short local time", () => {
   expect(formatTime("")).toBe("");
   expect(formatTime(null)).toBe("");
   expect(formatTime("not-a-date")).toBe("not-a-date");
+});
+
+it("formats familiar USD amounts and keeps the exact decimal", () => {
+  expect(formatUsdDisplay("2.96")).toEqual({ text: "$2.96", exact: "2.96 USD" });
+  expect(formatUsdDisplay("0.5")).toEqual({ text: "$0.50", exact: "0.5 USD" });
+  expect(formatUsdDisplay("0.1234")).toEqual({ text: "$0.1234", exact: "0.1234 USD" });
+  expect(formatUsdDisplay("0.004")).toEqual({ text: "<$0.01", exact: "0.004 USD" });
+  expect(formatUsdDisplay("0")).toEqual({ text: "$0.00", exact: "0 USD" });
+  expect(formatDisplayMoney({ amount: "2.96", currency: "USD" }).text).toBe("$2.96");
+  expect(formatDisplayMoney(null)).toEqual({ text: "Pending", exact: "" });
 });
 
 it("builds bar widths from decimals", () => {

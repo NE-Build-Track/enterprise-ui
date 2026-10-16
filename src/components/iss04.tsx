@@ -97,11 +97,16 @@ export function Iss04({ role, actorId }: { readonly role: SessionRole; readonly 
 
   return (
     <article className="panel">
-      <h1>ISS-04</h1>
+      <h1>Checks</h1>
+      <p role="status">
+        {health
+          ? `${health.version}. Discovery ${health.discovery_fresh ? "fresh" : "stale"}.`
+          : healthError || "Checking the engine."}
+      </p>
       <GyralElement
         tag="lp-blocker-checklist"
         load={loadBlockerChecklist}
-        label="ISS-04"
+        label="Checks"
         onOutput={onOutput}
         props={{ health, healthError, actors, reserved, probeNonce, repeatRef, repeatApp }}
       />

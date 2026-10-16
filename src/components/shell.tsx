@@ -4,8 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 
-import { api } from "@/lib/client-api";
-import { isRecord } from "@/lib/engine/errors";
 import type { SessionRole } from "@/lib/session-token";
 
 export function Shell({
@@ -24,7 +22,7 @@ export function Shell({
   function leave(): void {
     if (leaving.current) return;
     leaving.current = true;
-    // Soft navigation leaves the dashboard mounted, and its refresh loop keeps calling
+    // Soft navigation leaves the console mounted, and its refresh loop keeps calling
     // router.refresh(), so the login page never replaces that client state.
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     window.location.assign("/login");
@@ -57,7 +55,7 @@ export function Shell({
         <div>
           <p className="kicker">Livepeer builder</p>
           <p>
-            <Link href="/dashboard" className="site-name">
+            <Link href="/overview" className="site-name">
               Enterprise desk
             </Link>
           </p>
@@ -65,8 +63,18 @@ export function Shell({
         <nav aria-label="Primary">
           <ul>
             <li>
-              <Link href="/dashboard" aria-current={pathname === "/dashboard" ? "page" : undefined}>
-                Dashboard
+              <Link href="/overview" aria-current={pathname === "/overview" ? "page" : undefined}>
+                Overview
+              </Link>
+            </li>
+            <li>
+              <Link href="/jobs" aria-current={pathname === "/jobs" || (pathname.startsWith("/jobs/") && pathname !== "/jobs/new") ? "page" : undefined}>
+                Jobs
+              </Link>
+            </li>
+            <li>
+              <Link href="/billing" aria-current={pathname === "/billing" ? "page" : undefined}>
+                Billing
               </Link>
             </li>
             {role === "operator" ? (
@@ -77,13 +85,15 @@ export function Shell({
               </li>
             ) : null}
             <li>
-              <Link href="/iss-04" aria-current={pathname === "/iss-04" ? "page" : undefined}>
-                ISS-04
+              <Link href="/checks" aria-current={pathname === "/checks" ? "page" : undefined}>
+                Checks
               </Link>
             </li>
           </ul>
         </nav>
-        <StatusPill />
+        <Link href="/jobs/new" className="primary" aria-current={pathname === "/jobs/new" ? "page" : undefined}>
+          New job
+        </Link>
         <div className="session">
           <p>
             <bdi>{actorId ?? "actor unknown"}</bdi>
@@ -100,36 +110,3 @@ export function Shell({
   );
 }
 
-function StatusPill() {
-  const [text, setText] = useState("Checking engine");
-  const [ok, setOk] = useState<boolean | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function tick(): Promise<void> {
-      const result = await api("/api/health");
-      if (cancelled || !result.ok || !isRecord(result.body) || !isRecord(result.body.ready)) return;
-      const ready = result.body.ready;
-      const health = isRecord(ready.health) ? ready.health : null;
-      const live = isRecord(result.body.live) ? result.body.live.ok === true : false;
-      const readyOk = ready.status === 200 && health?.ready === true;
-      setOk(live && readyOk);
-      const version = typeof health?.version === "string" ? health.version : "engine";
-      const discovery = health?.discovery_fresh === true ? "discovery fresh" : "discovery stale";
-      setText(`${version} · ${discovery}`);
-    }
-    void tick();
-    const timer = setInterval(() => void tick(), 30_000);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, []);
-
-  const state = ok === false ? "down" : ok === true ? "up" : "pending";
-  return (
-    <p className="status" data-state={state} role="status">
-      {text}
-    </p>
-  );
-}

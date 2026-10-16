@@ -95,6 +95,13 @@ export function formFields(schema: SchemaNode, value: unknown): readonly FormFie
   return objectFields(schema, value, [], false);
 }
 
+/** Why a JSON value cannot be shown in Fields. Null means Fields can show it. */
+export function fieldsMismatch(schema: SchemaNode, value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (!isRecord(value)) return "This JSON is not an object, so Fields cannot show it.";
+  return mismatchNode(schema, value, []);
+}
+
 export function missingRequired(payload: Record<string, unknown> | null, required: readonly string[]): readonly string[] {
   if (required.length === 0) return [];
   if (!payload) return required;
@@ -276,6 +283,38 @@ function nodeFields(schema: SchemaNode, value: unknown, path: readonly string[],
   }
   const kind = branch.type === "number" || branch.type === "integer" ? "number" : "text";
   return [{ kind, path: path.join("."), label, value: value == null ? "" : String(value), title }];
+}
+
+function mismatchNode(schema: SchemaNode, value: unknown, path: readonly string[]): string | null {
+  const branch = displayedBranch(schema, value);
+  const options = stringEnum(branch);
+  const name = path.join(".") || "This value";
+  if (options.length > 0) {
+    if (value === undefined || value === null) return null;
+    if (typeof value !== "string" || !options.includes(value)) return `${name} is not one of the field choices.`;
+    return null;
+  }
+  if (branch.items || branch.type === "array") {
+    if (value === undefined || value === null) return null;
+    if (!Array.isArray(value)) return `${name} is not a list, so Fields cannot show it.`;
+    for (let index = 0; index < value.length; index += 1) {
+      const found = mismatchNode(branch.items ?? {}, value[index], [...path, String(index)]);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (branch.properties || branch.type === "object") {
+    if (value === undefined || value === null) return null;
+    if (!isRecord(value)) return `${name} is not a group of fields.`;
+    for (const [key, child] of Object.entries(branch.properties ?? {})) {
+      if (!Object.hasOwn(value, key)) continue;
+      const found = mismatchNode(child, value[key], [...path, key]);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (value === undefined || value === null || typeof value !== "object") return null;
+  return `${name} has a nested value Fields cannot edit.`;
 }
 
 function displayedBranch(schema: SchemaNode, value: unknown): SchemaNode {

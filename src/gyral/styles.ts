@@ -67,7 +67,7 @@ export const widgetStyles = css`
     table {
       inline-size: 100%;
       border-collapse: collapse;
-      font-size: 0.92rem;
+      font-size: 1rem;
     }
 
     caption {
@@ -87,7 +87,7 @@ export const widgetStyles = css`
 
     th {
       color: var(--text-muted, oklch(46% 0.018 81));
-      font-size: 0.75rem;
+      font-size: 0.875rem;
       font-weight: 650;
       letter-spacing: 0.04em;
       text-transform: uppercase;
@@ -131,13 +131,13 @@ export const widgetStyles = css`
     label {
       display: grid;
       gap: 0.25rem;
-      font-size: 0.85rem;
+      font-size: 1rem;
     }
 
     input,
     select,
     textarea {
-      border: 1px solid var(--border, oklch(89% 0.026 79));
+      border: 2px solid var(--border, oklch(89% 0.026 79));
       border-radius: 0.4rem;
       padding-block: 0.45rem;
       padding-inline: 0.55rem;
@@ -198,6 +198,178 @@ export const widgetStyles = css`
     .request-tabs label:focus-within {
       outline: 2px solid var(--brand, oklch(40% 0.09 170));
       outline-offset: 2px;
+    }
+
+    .job-form {
+      display: grid;
+      gap: 1.25rem;
+      align-items: start;
+    }
+
+    .job-controls {
+      display: grid;
+      gap: 0.75rem;
+      align-content: start;
+    }
+
+    .tasks {
+      display: grid;
+      gap: 0.5rem;
+      align-content: start;
+    }
+
+    .task-search {
+      display: grid;
+      gap: 0.25rem;
+      border: 0;
+      padding: 0;
+      background: transparent;
+      cursor: auto;
+    }
+
+    .task-list {
+      display: grid;
+      gap: 0.5rem;
+      align-content: start;
+      max-block-size: 16rem;
+      overflow: auto;
+      padding-block-end: 0.35rem;
+      padding-inline-end: 0.2rem;
+    }
+
+    .tasks label {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      align-items: start;
+      gap: 0.65rem;
+      min-block-size: 2.75rem;
+      border: 2px solid var(--border, oklch(89% 0.026 79));
+      border-radius: 0.7rem;
+      padding-block: 0.75rem 0.9rem;
+      padding-inline: 0.8rem;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+
+    .tasks label:has(:checked) {
+      border-color: var(--text, oklch(21.5% 0.009 82));
+      background: color-mix(in oklch, var(--brand, oklch(40% 0.09 170)) 12%, transparent);
+    }
+
+    .tasks label:focus-within {
+      outline: 2px solid var(--brand, oklch(40% 0.09 170));
+      outline-offset: 2px;
+    }
+
+    .tasks label.task-search {
+      grid-template-columns: 1fr;
+      min-block-size: 0;
+      border: 0;
+      padding: 0;
+      background: transparent;
+      cursor: auto;
+    }
+
+    .tasks label.task-search:focus-within {
+      outline: none;
+    }
+
+    .task-name {
+      min-inline-size: 0;
+    }
+
+    .tasks strong,
+    .tasks .muted,
+    .tasks code {
+      display: block;
+    }
+
+    .tasks code {
+      margin-block-start: 0.2rem;
+      overflow-wrap: anywhere;
+      white-space: normal;
+      color: var(--text-muted, oklch(46% 0.018 81));
+      font-family: ui-monospace, "IBM Plex Mono", monospace;
+      font-size: 0.8125rem;
+      font-style: normal;
+      line-height: 1.4;
+      text-decoration: none;
+    }
+
+    .job-controls {
+      max-inline-size: 34rem;
+    }
+
+    .job-controls input:not([type="radio"], [type="checkbox"]),
+    .job-controls select,
+    .job-controls textarea,
+    .tree input,
+    .tree select,
+    .tree textarea {
+      inline-size: 100%;
+      max-inline-size: none;
+    }
+
+    .tree input[inputmode="decimal"],
+    .job-controls input[inputmode="decimal"],
+    .job-controls input[inputmode="numeric"] {
+      max-inline-size: 8rem;
+    }
+
+    .check {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 0.65rem 1rem;
+      align-items: end;
+      border: 2px solid var(--border, oklch(89% 0.026 79));
+      border-radius: 0.7rem;
+      padding: 0.85rem;
+    }
+
+    .check h2,
+    .check dl {
+      grid-column: 1;
+    }
+
+    .check button {
+      grid-column: 2;
+      grid-row: 1 / span 2;
+    }
+
+    .check h2 {
+      margin: 0;
+      font-size: 1.15rem;
+    }
+
+    @container (max-width: 36rem) {
+      .check {
+        grid-template-columns: 1fr;
+      }
+
+      .check button {
+        grid-column: 1;
+        grid-row: auto;
+      }
+    }
+
+    @container (min-width: 52rem) {
+      .job-form {
+        grid-template-columns: minmax(22rem, 26rem) minmax(0, 34rem);
+      }
+
+      .tasks {
+        grid-column: 1;
+        grid-row: 1;
+      }
+
+      .job-controls {
+        grid-column: 2;
+        grid-row: 1;
+      }
+
+      .task-list {
+        max-block-size: min(36rem, 70dvh);
+      }
     }
 
     .tree,
@@ -300,16 +472,22 @@ export const widgetStyles = css`
       background: color-mix(in oklch, var(--brand, oklch(40% 0.09 170)) 14%, transparent);
     }
 
-    table.jobs {
-      table-layout: fixed;
+    table.jobs a.action {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-block-size: 2.75rem;
+      min-inline-size: 2.75rem;
+      padding-inline: 0.85rem;
+      border: 2px solid var(--text, oklch(21.5% 0.009 82));
+      border-radius: 999px;
+      color: inherit;
+      text-decoration: none;
     }
 
-    table.jobs col.state {
-      inline-size: 8.5rem;
-    }
-
-    table.jobs col.when {
-      inline-size: 9.5rem;
+    table.jobs a.action:focus-visible {
+      outline: 2px solid var(--brand, oklch(40% 0.09 170));
+      outline-offset: 2px;
     }
 
     table.jobs th[scope="row"] {
@@ -356,7 +534,7 @@ export const widgetStyles = css`
       overflow-wrap: anywhere;
     }
 
-    @container (max-width: 28rem) {
+    @container (max-width: 40rem) {
       table.jobs thead {
         display: none;
       }
@@ -370,26 +548,17 @@ export const widgetStyles = css`
         inline-size: auto;
       }
 
-      table.jobs tr:not(.nested) {
+      table.jobs tr {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) auto;
-        gap: 0.2rem 0.75rem;
-        padding-block-start: 0.65rem;
-      }
-
-      table.jobs tr:not(.nested) .when {
-        grid-column: 1 / -1;
-      }
-
-      table.jobs tr.nested td {
-        padding-block: 0.15rem 0.65rem;
+        gap: 0.35rem;
+        padding-block: 0.75rem;
       }
     }
 
     .muted {
       display: block;
       color: var(--text-muted, oklch(46% 0.018 81));
-      font-size: 0.85rem;
+      font-size: 0.875rem;
       overflow-wrap: anywhere;
     }
 
@@ -415,7 +584,7 @@ export const widgetStyles = css`
       border-radius: 999px;
       padding-block: 0.1rem;
       padding-inline: 0.5rem;
-      font-size: 0.75rem;
+      font-size: 0.875rem;
       letter-spacing: 0.03em;
       text-transform: uppercase;
 
