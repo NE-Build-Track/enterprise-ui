@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 
 import { GyralElement } from "@/components/GyralElement";
 import { loadAllowanceMeter, loadCostBreakdown, loadReconciliationCard } from "@/gyral/loaders";
@@ -79,6 +79,15 @@ export function Billing() {
           <GyralElement tag="lp-allowance-meter" load={loadAllowanceMeter} label="Allowance" props={{ allowance: data.allowance, error: data.allowanceError }} />
         </article>
         <article className="panel">
+          <h2>Reconciliation</h2>
+          <GyralElement
+            tag="lp-reconciliation-card"
+            load={loadReconciliationCard}
+            label="Reconciliation"
+            props={{ reconciliation: data.reconciliation, error: data.reconciliationError }}
+          />
+        </article>
+        <article className="panel">
           <h2>Cost breakdown</h2>
           <GyralElement
             tag="lp-cost-breakdown"
@@ -100,12 +109,35 @@ export function Billing() {
               {COST_CLASSES.map((name) => {
                 const display = formatUsdDisplay(data.summary?.by_class[name]?.fee_usd);
                 const matches = jobsForClass(pricedJobs, costs, name);
+                const headingId = `billing-class-${name}`;
                 return (
-                  <tr key={name}>
-                    <th scope="row">{CLASS_LABELS[name]}</th>
-                    <td title={display.exact}>{data.summary ? display.text : "Pending"}</td>
-                    <td>{jobLinks(matches, outside, costsReady)}</td>
-                  </tr>
+                  <Fragment key={name}>
+                    <tr>
+                      <th scope="row" id={headingId}>
+                        {CLASS_LABELS[name]}
+                      </th>
+                      <td title={display.exact}>{data.summary ? display.text : "Pending"}</td>
+                      <td>{jobStatus(matches, outside, costsReady)}</td>
+                    </tr>
+                    {costsReady && matches.length > 0 ? (
+                      <tr>
+                        <td colSpan={3} headers={headingId}>
+                          <ul className="billing-jobs">
+                            {matches.map((job) => {
+                              const title = jobTitle(job);
+                              return (
+                                <li key={job.id}>
+                                  <Link href={`/jobs/${job.id}`}>
+                                    {title.name} <span className="muted">{title.detail}</span>
+                                  </Link>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </td>
+                      </tr>
+                    ) : null}
+                  </Fragment>
                 );
               })}
               <tr>
@@ -125,39 +157,13 @@ export function Billing() {
           {costsError ? <p role="alert">{costsError}</p> : null}
           {outside ? <p>Some jobs in this period are outside the loaded cost detail.</p> : null}
         </article>
-        <article className="panel">
-          <h2>Reconciliation</h2>
-          <GyralElement
-            tag="lp-reconciliation-card"
-            load={loadReconciliationCard}
-            label="Reconciliation"
-            props={{ reconciliation: data.reconciliation, error: data.reconciliationError }}
-          />
-        </article>
       </div>
     </>
   );
 }
 
-function jobLinks(
-  jobs: readonly { id: string; app: string; operation_ref: string | null }[],
-  outside: boolean,
-  costsReady: boolean,
-) {
+function jobStatus(jobs: readonly unknown[], outside: boolean, costsReady: boolean): string {
   if (!costsReady) return "Loading cost detail";
   if (jobs.length === 0) return outside ? "Outside the loaded history" : "No loaded job is in this category";
-  return (
-    <ul className="recent">
-      {jobs.map((job) => {
-        const title = jobTitle(job);
-        return (
-          <li key={job.id}>
-            <Link href={`/jobs/${job.id}`}>
-              {title.name} <span className="muted">{title.detail}</span>
-            </Link>
-          </li>
-        );
-      })}
-    </ul>
-  );
+  return jobs.length === 1 ? "1 job" : `${jobs.length} jobs`;
 }
