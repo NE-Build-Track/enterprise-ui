@@ -48,7 +48,7 @@ export function OperatorDesk() {
     setGrants(nextGrants);
     setGrantId((current) => (nextGrants.some((grant) => grant.id === current) ? current : (nextGrants[0]?.id ?? "")));
     setError(keyResult.ok ? (actorResult.ok ? "" : actorResult.error) : keyResult.error);
-    if (!grantResult.ok) setGrantError(grantResult.error);
+    setGrantError(grantResult.ok ? "" : grantResult.error);
   }, []);
 
   useEffect(() => {
@@ -195,11 +195,11 @@ export function OperatorDesk() {
             }}
           >
             <label>
-              Grant name (required)
+              <span>Grant name (required)</span>
               <input value={grantName} onChange={(event) => setGrantName(event.target.value)} required autoComplete="off" />
             </label>
             <label>
-              Amount USD (required)
+              <span>Amount USD (required)</span>
               <input
                 value={grantAmount}
                 onChange={(event) => setGrantAmount(event.target.value)}
@@ -212,7 +212,7 @@ export function OperatorDesk() {
           </form>
           {grantError ? <p role="alert">{grantError}</p> : null}
           {grants.length === 0 ? (
-            <p role="status">No grants yet.</p>
+            <output>No grants yet.</output>
           ) : (
             <table className="breakdown">
               <caption>Grants</caption>
@@ -241,7 +241,7 @@ export function OperatorDesk() {
             </table>
           )}
           <h2>Allocations</h2>
-          <p>The actor id is the name you choose. Provisioning draws from the selected grant and does not create a login key.</p>
+          <p>The actor id is the name you choose. Provisioning uses the selected grant, or the grant configured on the engine when none is selected. It does not create a login key.</p>
           <form
             className="cluster"
             onSubmit={(event) => {
@@ -250,9 +250,9 @@ export function OperatorDesk() {
             }}
           >
             <label>
-              Grant (required)
-              <select value={grantId} onChange={(event) => setGrantId(event.target.value)} required>
-                {grants.length === 0 ? <option value="">No grants</option> : null}
+              <span>Grant</span>
+              <select value={grantId} onChange={(event) => setGrantId(event.target.value)} required={grants.length > 0}>
+                {grants.length === 0 ? <option value="">Engine default</option> : null}
                 {grants.map((grant) => (
                   <option key={grant.id} value={grant.id}>
                     {grant.name}
@@ -350,7 +350,14 @@ export function OperatorDesk() {
 }
 
 function isGrant(value: unknown): value is EngineGrant {
-  return isRecord(value) && typeof value.id === "string" && typeof value.name === "string";
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.name === "string" &&
+    typeof value.status === "string" &&
+    typeof value.currency === "string" &&
+    typeof value.total === "string"
+  );
 }
 
 function isProvisioned(value: unknown): value is ProvisionedActor {

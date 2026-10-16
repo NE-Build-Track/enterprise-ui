@@ -186,6 +186,13 @@
             "title": "Payment Sent",
             "type": "boolean"
           },
+          "sessions": {
+            "items": {
+              "$ref": "#/components/schemas/SignedSession"
+            },
+            "title": "Sessions",
+            "type": "array"
+          },
           "runner_url": {
             "anyOf": [
               {
@@ -196,13 +203,6 @@
               }
             ],
             "title": "Runner Url"
-          },
-          "sessions": {
-            "items": {
-              "$ref": "#/components/schemas/SignedSession"
-            },
-            "title": "Sessions",
-            "type": "array"
           },
           "started_at": {
             "format": "date-time",
@@ -604,58 +604,6 @@
           "operation_ref"
         ],
         "title": "FundRequest",
-        "type": "object"
-      },
-      "GrantBody": {
-        "properties": {
-          "amount": {
-            "$ref": "#/components/schemas/Money-Input"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "amount"
-        ],
-        "title": "GrantBody",
-        "type": "object"
-      },
-      "GrantRecord": {
-        "additionalProperties": false,
-        "description": "A Batteries grant the operator can fund actors from.",
-        "properties": {
-          "currency": {
-            "title": "Currency",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "status": {
-            "title": "Status",
-            "type": "string"
-          },
-          "total": {
-            "title": "Total",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "status",
-          "currency",
-          "total"
-        ],
-        "title": "GrantRecord",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -1673,7 +1621,7 @@
       },
       "SignedSession": {
         "additionalProperties": false,
-        "description": "One session the signer signed for an attempt.\n\n``manifest_id`` is the orchestrator's label from the 402 challenge. Cost sync resolves it to\nthe Batteries ``payment_session_id`` on ``(allocation_id, manifest_id)``. ``match`` stays\n``unmatched`` until that resolution, becomes ``matched`` when exactly one Batteries session\nand one log entry share the key, and ``ambiguous`` when they do not.",
+        "description": "One session the signer signed for an attempt.",
         "properties": {
           "manifest_id": {
             "title": "Manifest Id",
@@ -1809,6 +1757,58 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "GrantBody": {
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/Money-Input"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "amount"
+        ],
+        "title": "GrantBody",
+        "type": "object"
+      },
+      "GrantRecord": {
+        "additionalProperties": false,
+        "description": "A Batteries grant the operator can fund actors from.",
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "status",
+          "currency",
+          "total"
+        ],
+        "title": "GrantRecord",
         "type": "object"
       }
     }
@@ -2133,95 +2133,6 @@
           }
         },
         "summary": "Sync Costs"
-      }
-    },
-    "/v1/admin/grant/fund": {
-      "post": {
-        "operationId": "fund_grant_v1_admin_grant_fund_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/FundRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Fund Grant"
-      }
-    },
-    "/v1/admin/grants": {
-      "get": {
-        "operationId": "list_grants_v1_admin_grants_get",
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/GrantRecord"
-                  },
-                  "title": "Response List Grants V1 Admin Grants Get",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          }
-        },
-        "summary": "List Grants"
-      },
-      "post": {
-        "operationId": "create_grant_v1_admin_grants_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GrantBody"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GrantRecord"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Create Grant"
       }
     },
     "/v1/admin/keys": {
@@ -2999,6 +2910,95 @@
           }
         },
         "summary": "Open Session"
+      }
+    },
+    "/v1/admin/grant/fund": {
+      "post": {
+        "operationId": "fund_grant_v1_admin_grant_fund_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FundRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fund Grant"
+      }
+    },
+    "/v1/admin/grants": {
+      "get": {
+        "operationId": "list_grants_v1_admin_grants_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/GrantRecord"
+                  },
+                  "title": "Response List Grants V1 Admin Grants Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Grants"
+      },
+      "post": {
+        "operationId": "create_grant_v1_admin_grants_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrantBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GrantRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Grant"
       }
     }
   }

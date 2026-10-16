@@ -2,7 +2,7 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, expect, it } from "vitest";
 
-import { jobResult, listGrants, provisionActor, readyz, reservedProbes, runJob } from "./api";
+import { createGrant, jobResult, listGrants, provisionActor, readyz, reservedProbes, runJob } from "./api";
 import { createEngineCall } from "./client";
 import { EngineRequestError } from "./errors";
 
@@ -106,11 +106,89 @@ it("provisions an actor allocation in USD", async () => {
     actorId: "ada",
     amount: "1",
     label: "ada",
+  });
+  expect(body).toEqual({ amount: { amount: "1", currency: "USD" }, label: "ada", grant_id: "" });
+  expect(actor.allocation_id).toBe("alloc");
+  expect(actor.status).toBe("active");
+});
+
+it("provisions an actor from the chosen grant", async () => {
+  let body: unknown;
+  server.use(
+    http.post("http://engine.test/v1/admin/applications/:application/actors/:actor/allocation", async ({ request }) => {
+      body = await request.json();
+      return HttpResponse.json(
+        {
+          application_id: "default",
+          actor_id: "ada",
+          grant_id: "grant-1",
+          allocation_id: "alloc",
+          api_key_id: "pay",
+          secret_ref: { ref: "db:1" },
+          currency: "USD",
+          status: "active",
+          created_at: "2026-10-14T00:00:00Z",
+          updated_at: "2026-10-14T00:00:00Z",
+        },
+        { status: 201 },
+      );
+    }),
+  );
+  await provisionActor(call(), {
+    applicationId: "default",
+    actorId: "ada",
+    amount: "1",
+    label: "ada",
     grantId: "grant-1",
   });
   expect(body).toEqual({ amount: { amount: "1", currency: "USD" }, label: "ada", grant_id: "grant-1" });
-  expect(actor.allocation_id).toBe("alloc");
-  expect(actor.status).toBe("active");
+});
+
+const grantRecord = {
+  id: "grant-1",
+  name: "Ops",
+  status: "active",
+  currency: "USD",
+  total: "100.00",
+};
+
+it("lists a grant with the amount the table renders", async () => {
+  server.use(http.get("http://engine.test/v1/admin/grants", () => HttpResponse.json([grantRecord])));
+  await expect(listGrants(call())).resolves.toEqual([grantRecord]);
+});
+
+it("creates a grant and keeps the returned amount", async () => {
+  let body: unknown;
+  server.use(
+    http.post("http://engine.test/v1/admin/grants", async ({ request }) => {
+      body = await request.json();
+      return HttpResponse.json(grantRecord, { status: 201 });
+    }),
+  );
+  const grant = await createGrant(call(), "Ops", "100.00");
+  expect(body).toEqual({ name: "Ops", amount: { amount: "100.00", currency: "USD" } });
+  expect(grant).toEqual(grantRecord);
+});
+
+it("rejects a grants body that is not a list", async () => {
+  server.use(http.get("http://engine.test/v1/admin/grants", () => HttpResponse.json({ items: [] })));
+  await expect(listGrants(call())).rejects.toThrow("the engine did not return a grant list");
+});
+
+it("omits a grant that has no total", async () => {
+  server.use(
+    http.get("http://engine.test/v1/admin/grants", () =>
+      HttpResponse.json([{ id: "grant-1", name: "Ops", status: "active", currency: "USD" }]),
+    ),
+  );
+  await expect(listGrants(call())).resolves.toEqual([]);
+});
+
+it("rejects a create response that omits the amount", async () => {
+  server.use(
+    http.post("http://engine.test/v1/admin/grants", () => HttpResponse.json({ id: "grant-1", name: "Ops" }, { status: 201 })),
+  );
+  await expect(createGrant(call(), "Ops", "100.00")).rejects.toThrow("the engine did not return a grant");
 });
 
 it("maps a reserved 501 onto milestone and ticket", async () => {
@@ -131,11 +209,6 @@ it("maps a reserved 501 onto milestone and ticket", async () => {
     [501, "M4", "ISS-27"],
     [501, "M4", "ISS-26"],
   ]);
-});
-
-it("rejects a grants body that is not a list", async () => {
-  server.use(http.get("http://engine.test/v1/admin/grants", () => HttpResponse.json({ items: [] })));
-  await expect(listGrants(call())).rejects.toBeInstanceOf(EngineRequestError);
 });
 
 it("throws a typed error for an unknown key", async () => {

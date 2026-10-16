@@ -215,13 +215,17 @@ function allocationParams(target: AllocationTarget) {
 
 export async function provisionActor(
   call: EngineCall,
-  target: AllocationTarget & { readonly amount: string; readonly label: string; readonly grantId: string },
+  target: AllocationTarget & { readonly amount: string; readonly label: string; readonly grantId?: string },
 ): Promise<ProvisionedActor> {
   const result = await call.client.POST(
     "/v1/admin/applications/{application_id}/actors/{actor_id}/allocation",
     {
       params: allocationParams(target),
-      body: { amount: { amount: target.amount, currency: "USD" }, label: target.label, grant_id: target.grantId },
+      body: {
+        amount: { amount: target.amount, currency: "USD" },
+        label: target.label,
+        grant_id: target.grantId ?? "",
+      },
     },
   );
   return unwrap(result);
@@ -236,26 +240,22 @@ export type EngineGrant = {
 };
 
 export async function listGrants(call: EngineCall): Promise<EngineGrant[]> {
-  const response = await engineFetch(call, "/v1/admin/grants");
-  const body: unknown = await response.json().catch(() => null);
-  if (!response.ok) throw engineErrorFrom(response.status, body, response.headers);
-  if (!Array.isArray(body)) throw engineErrorFrom(response.status, body, response.headers);
-  return body.flatMap((item) => {
+  const result = await call.client.GET("/v1/admin/grants");
+  if (!result.response.ok) throw engineErrorFrom(result.response.status, result.error, result.response.headers);
+  if (!Array.isArray(result.data)) throw new Error("the engine did not return a grant list");
+  return result.data.flatMap((item) => {
     const grant = asGrant(item);
     return grant ? [grant] : [];
   });
 }
 
 export async function createGrant(call: EngineCall, name: string, amount: string): Promise<EngineGrant> {
-  const response = await engineFetch(call, "/v1/admin/grants", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ name, amount: { amount, currency: "USD" } }),
+  const result = await call.client.POST("/v1/admin/grants", {
+    body: { name, amount: { amount, currency: "USD" } },
   });
-  const body: unknown = await response.json().catch(() => null);
-  if (!response.ok) throw engineErrorFrom(response.status, body, response.headers);
-  const grant = asGrant(body);
-  if (!grant) throw engineErrorFrom(response.status, body, response.headers);
+  if (!result.response.ok) throw engineErrorFrom(result.response.status, result.error, result.response.headers);
+  const grant = asGrant(result.data);
+  if (!grant) throw new Error("the engine did not return a grant");
   return grant;
 }
 
@@ -267,13 +267,22 @@ export async function fundGrant(call: EngineCall, amount: string, operationRef: 
 }
 
 function asGrant(value: unknown): EngineGrant | null {
-  if (!isRecord(value) || typeof value.id !== "string" || typeof value.name !== "string") return null;
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    typeof value.name !== "string" ||
+    typeof value.status !== "string" ||
+    typeof value.currency !== "string" ||
+    typeof value.total !== "string"
+  ) {
+    return null;
+  }
   return {
     id: value.id,
     name: value.name,
-    status: typeof value.status === "string" ? value.status : "",
-    currency: typeof value.currency === "string" ? value.currency : "USD",
-    total: typeof value.total === "string" ? value.total : "",
+    status: value.status,
+    currency: value.currency,
+    total: value.total,
   };
 }
 
@@ -409,9 +418,9 @@ export const engineHandlers = {
   "GET /v1/admin/keys": listKeys,
   "POST /v1/admin/keys": issueKey,
   "POST /v1/admin/keys/{key_id}/revoke": revokeKey,
-  "POST /v1/admin/grant/fund": fundGrant,
   "GET /v1/admin/grants": listGrants,
   "POST /v1/admin/grants": createGrant,
+  "POST /v1/admin/grant/fund": fundGrant,
   "POST /v1/admin/applications/{application_id}/actors/{actor_id}/allocation": provisionActor,
   "POST /v1/admin/applications/{application_id}/actors/{actor_id}/allocation/fund": fundAllocation,
   "POST /v1/admin/applications/{application_id}/actors/{actor_id}/allocation/status": setAllocationStatus,
