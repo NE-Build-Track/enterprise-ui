@@ -125,16 +125,12 @@
         "additionalProperties": false,
         "description": "One runner call. Written as ``in_flight`` before the call, updated after it.",
         "properties": {
-          "allocation_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Allocation Id"
+          "auth_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Auth Ids",
+            "type": "array"
           },
           "ended_at": {
             "anyOf": [
@@ -152,6 +148,17 @@
             "format": "uuid",
             "title": "Job Id",
             "type": "string"
+          },
+          "manifest_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manifest Id"
           },
           "number": {
             "title": "Number",
@@ -186,13 +193,6 @@
             "title": "Payment Sent",
             "type": "boolean"
           },
-          "sessions": {
-            "items": {
-              "$ref": "#/components/schemas/SignedSession"
-            },
-            "title": "Sessions",
-            "type": "array"
-          },
           "runner_url": {
             "anyOf": [
               {
@@ -226,8 +226,8 @@
           "number",
           "runner_url",
           "orchestrator_url",
-          "allocation_id",
-          "sessions",
+          "auth_ids",
+          "manifest_id",
           "payment_sent",
           "outcome",
           "status_code",
@@ -604,6 +604,58 @@
           "operation_ref"
         ],
         "title": "FundRequest",
+        "type": "object"
+      },
+      "GrantBody": {
+        "properties": {
+          "amount": {
+            "$ref": "#/components/schemas/Money-Input"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "amount"
+        ],
+        "title": "GrantBody",
+        "type": "object"
+      },
+      "GrantRecord": {
+        "additionalProperties": false,
+        "description": "A Batteries grant the operator can fund actors from.",
+        "properties": {
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "status",
+          "currency",
+          "total"
+        ],
+        "title": "GrantRecord",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -1175,6 +1227,11 @@
           "amount": {
             "$ref": "#/components/schemas/Money-Input"
           },
+          "grant_id": {
+            "default": "",
+            "title": "Grant Id",
+            "type": "string"
+          },
           "label": {
             "default": "",
             "title": "Label",
@@ -1614,42 +1671,6 @@
         "title": "SessionRequest",
         "type": "object"
       },
-      "SignedSession": {
-        "additionalProperties": false,
-        "description": "One session the signer signed for an attempt.",
-        "properties": {
-          "manifest_id": {
-            "title": "Manifest Id",
-            "type": "string"
-          },
-          "match": {
-            "default": "unmatched",
-            "enum": [
-              "unmatched",
-              "matched",
-              "ambiguous"
-            ],
-            "title": "Match",
-            "type": "string"
-          },
-          "payment_session_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Payment Session Id"
-          }
-        },
-        "required": [
-          "manifest_id"
-        ],
-        "title": "SignedSession",
-        "type": "object"
-      },
       "StatusBody": {
         "properties": {
           "status": {
@@ -2078,6 +2099,95 @@
         "summary": "Sync Costs"
       }
     },
+    "/v1/admin/grant/fund": {
+      "post": {
+        "operationId": "fund_grant_v1_admin_grant_fund_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FundRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fund Grant"
+      }
+    },
+    "/v1/admin/grants": {
+      "get": {
+        "operationId": "list_grants_v1_admin_grants_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/GrantRecord"
+                  },
+                  "title": "Response List Grants V1 Admin Grants Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Grants"
+      },
+      "post": {
+        "operationId": "create_grant_v1_admin_grants_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrantBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GrantRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Grant"
+      }
+    },
     "/v1/admin/keys": {
       "get": {
         "operationId": "list_keys_v1_admin_keys_get",
@@ -2296,6 +2406,52 @@
           }
         },
         "summary": "Allowance"
+      }
+    },
+    "/v1/costs/projections": {
+      "get": {
+        "operationId": "cost_projections_v1_costs_projections_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 25,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/JobCost"
+                  },
+                  "title": "Response Cost Projections V1 Costs Projections Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cost Projections"
       }
     },
     "/v1/costs/summary": {

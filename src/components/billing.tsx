@@ -11,7 +11,7 @@ import { formatWindow, jobTitle, periodSpendUsd } from "@/lib/job-copy";
 import { billingCostJobs, inWindow, jobsForClass } from "@/lib/job-history";
 import { feePositive, formatDisplayMoney, formatUsdDisplay } from "@/lib/money";
 
-import { useConsoleData, useJobCosts } from "./use-console";
+import { useConsoleData } from "./use-console";
 
 const CLASS_LABELS: Record<CostClass, string> = {
   delivered: "Delivered",
@@ -32,11 +32,7 @@ export function Billing() {
   }, [data.end, data.jobs, data.start]);
   const priced = billingCostJobs(windowJobs);
   const pricedJobs = priced.jobs;
-  const costRevision = pricedJobs.map((job) => `${job.id}\t${job.state}\t${job.completed_at ?? ""}`).join("\n");
-  const costs = useJobCosts(
-    pricedJobs.map((job) => job.id),
-    costRevision,
-  );
+  const costs = data.costs;
   const loadedCount = pricedJobs.filter((job) => costs.has(job.id)).length;
   const costsReady = pricedJobs.length === 0 || loadedCount === pricedJobs.length;
   const outside = priced.truncated;

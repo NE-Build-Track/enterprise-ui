@@ -115,6 +115,13 @@ export async function jobCost(call: EngineCall, jobId: string): Promise<JobCost>
   return unwrap(result);
 }
 
+export async function recentJobCosts(call: EngineCall, limit = 25): Promise<JobCost[]> {
+  const result = await call.client.GET("/v1/costs/projections", {
+    params: { query: { limit } },
+  });
+  return unwrap(result);
+}
+
 export type StoredEngineBody = {
   readonly status: number;
   readonly contentType: string;
@@ -250,6 +257,13 @@ export async function createGrant(call: EngineCall, name: string, amount: string
   const grant = asGrant(body);
   if (!grant) throw engineErrorFrom(response.status, body, response.headers);
   return grant;
+}
+
+export async function fundGrant(call: EngineCall, amount: string, operationRef: string): Promise<void> {
+  const result = await call.client.POST("/v1/admin/grant/fund", {
+    body: { amount: { amount, currency: "USD" }, operation_ref: operationRef },
+  });
+  await unwrap(result);
 }
 
 function asGrant(value: unknown): EngineGrant | null {
@@ -389,11 +403,15 @@ export const engineHandlers = {
   "GET /v1/jobs/{job_id}/cost": jobCost,
   "GET /v1/jobs/{job_id}/result": jobResult,
   "POST /v1/jobs/{job_id}/usage": reportUsage,
+  "GET /v1/costs/projections": recentJobCosts,
   "GET /v1/costs/summary": costSummary,
   "GET /v1/allowance": allowance,
   "GET /v1/admin/keys": listKeys,
   "POST /v1/admin/keys": issueKey,
   "POST /v1/admin/keys/{key_id}/revoke": revokeKey,
+  "POST /v1/admin/grant/fund": fundGrant,
+  "GET /v1/admin/grants": listGrants,
+  "POST /v1/admin/grants": createGrant,
   "POST /v1/admin/applications/{application_id}/actors/{actor_id}/allocation": provisionActor,
   "POST /v1/admin/applications/{application_id}/actors/{actor_id}/allocation/fund": fundAllocation,
   "POST /v1/admin/applications/{application_id}/actors/{actor_id}/allocation/status": setAllocationStatus,

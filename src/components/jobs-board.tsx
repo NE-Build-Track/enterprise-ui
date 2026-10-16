@@ -10,7 +10,7 @@ import { billingCurrency, jobStateLabel } from "@/lib/job-copy";
 import { filterJobs, JOB_LIST_LIMIT, JOB_PAGE_SIZE, paginate, readJobFilters } from "@/lib/job-history";
 import type { Job } from "@/lib/engine/types";
 
-import { useConsoleData, useJobCosts } from "./use-console";
+import { useConsoleData } from "./use-console";
 
 const STATES: readonly Job["state"][] = ["queued", "running", "succeeded", "failed", "uncertain"];
 
@@ -32,17 +32,12 @@ export function JobsBoard() {
   const filtered = useMemo(() => filterJobs(data.jobs, filters), [data.jobs, filters]);
   const page = paginate(filtered, filters.page, JOB_PAGE_SIZE);
   const currency = billingCurrency(data.allowance?.available, data.allowance?.spent, data.allowance?.granted);
-  const costRevision = page.items.map((job) => `${job.id}\t${job.state}\t${job.completed_at ?? ""}`).join("\n");
-  const costs = useJobCosts(
-    page.items.map((job) => job.id),
-    costRevision,
-  );
   const apps = useMemo(
     () => [...new Set(data.jobs.map((job) => job.app))].sort((left, right) => left.localeCompare(right)),
     [data.jobs],
   );
   const costList = page.items.flatMap((job) => {
-    const cost = costs.get(job.id);
+    const cost = data.costs.get(job.id);
     return cost ? [cost] : [];
   });
 
