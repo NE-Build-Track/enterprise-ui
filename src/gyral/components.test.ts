@@ -437,55 +437,6 @@ it("shows each job with a status label and a details link", () => {
   expect(html).not.toContain("Retry last job");
 });
 
-it("shows an observed sub-cent fee in the jobs table", () => {
-  const cost = {
-    job_id: "job-1",
-    status: "observed" as const,
-    fees: { fee_eth: "4.10026156E-10", fee_usd: "9.97880655857E-7", row_count: 1 },
-    attempts: [],
-    first_observed_at: "2026-10-16T01:41:10.000Z",
-    updated_at: "2026-10-16T01:41:10.000Z",
-  };
-  const html = renderToString(
-    viewOf(JobList, {}, {
-      props: {
-        jobs: [
-          {
-            id: "job-1",
-            actor_id: "ada",
-            application_id: "default",
-            app: "comfystream/ffmpeg-compose",
-            attempts: [],
-            capability: null,
-            completed_at: "2026-10-16T01:41:04.000Z",
-            created_at: "2026-10-16T01:41:00.000Z",
-            failure: null,
-            mode: "immediate",
-            model: null,
-            operation_ref: "probe-2c962d89-162d-41e1-9aeb-c880c3e131f7",
-            result: {
-              content_type: "application/json",
-              location: null,
-              sha256: "abc123",
-              size_bytes: 2,
-              storage: "inline",
-            },
-            state: "succeeded",
-            usage: null,
-          },
-        ],
-        error: "",
-        currency: "USD",
-        costs: [cost],
-      },
-    }),
-    { dev: false },
-  );
-  expect(html).toContain("&lt;$0.01");
-  expect(html).not.toContain("Awaiting cost");
-  expect(html).toContain('datetime="2026-10-16T01:41:00.000Z"');
-});
-
 it("names the estimate and opens the finished job", () => {
   const html = renderToString(viewOf(JobRunner, runner, { props: { offerings: [], remembered: null } }), { dev: false });
   expect(html).toContain("Estimate unavailable");

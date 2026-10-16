@@ -49,10 +49,6 @@ export const JobList = define<Stateless, never, Props>()("lp-job-list", {
   view: (_state, _intents, ctx) => {
     const jobs = [...ctx.props.jobs].sort((left, right) => right.created_at.localeCompare(left.created_at));
     const costs = new Map(ctx.props.costs.map((cost) => [cost.job_id, cost]));
-    const rowInput = (job: Job): { readonly cost: JobCost | null; readonly currency: BillingCurrency } => ({
-      cost: costs.get(job.id) ?? null,
-      currency: ctx.props.currency,
-    });
     return html`
       ${ctx.props.error ? html`<p role="alert">${ctx.props.error}</p>` : ""}
       ${
@@ -71,7 +67,7 @@ export const JobList = define<Stateless, never, Props>()("lp-job-list", {
                 </tr>
               </thead>
               <tbody>
-                ${each(jobs, (job) => job.id, (job, picked) => Row(job, picked.cost, picked.currency), rowInput)}
+                ${each(jobs, (job) => job.id, (job) => Row(job, costs.get(job.id) ?? null, ctx.props.currency))}
               </tbody>
             </table>`
       }
