@@ -56,7 +56,8 @@ export function JobDetail({ id }: { readonly id: string }) {
   }, [id, load]);
 
   useEffect(() => {
-    if (!job || job.id !== id || (job.state !== "running" && job.state !== "queued")) return;
+    if (job?.id !== id) return;
+    if (job.state !== "running" && job.state !== "queued") return;
     let active = true;
     const timer = setInterval(() => void load(id, () => active), 3_000);
     return () => {

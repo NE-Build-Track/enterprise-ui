@@ -40,6 +40,20 @@ function isJobRequest(value: unknown): value is JobRequest {
   return isRecord(value) && typeof value.app === "string";
 }
 
+function completedJobId(detail: Record<string, unknown>): string | null {
+  if (detail._tag !== "JobCompleted" || typeof detail.jobId !== "string" || detail.failed === true) return null;
+  if (detail.conflict !== true && isJobRequest(detail.request)) rememberJobRequest(detail.jobId, detail.request);
+  const result = detail.result;
+  if (isRecord(result) && typeof result.body === "string" && result.body !== "") {
+    rememberJobResult(detail.jobId, {
+      body: result.body,
+      contentType: typeof result.contentType === "string" ? result.contentType : "",
+      truncated: false,
+    });
+  }
+  return detail.jobId;
+}
+
 export function NewJob({ app, again }: { readonly app: string; readonly again: boolean }) {
   const router = useRouter();
   const [offerings, setOfferings] = useState<readonly Offering[]>([]);
@@ -71,22 +85,10 @@ export function NewJob({ app, again }: { readonly app: string; readonly again: b
   const onRunner = useCallback(
     (detail: unknown) => {
       if (!isRecord(detail)) return;
-      if (detail._tag === "OfferingRemembered" && typeof detail.app === "string") {
-        writeLastOffering(detail.app);
-      }
+      if (detail._tag === "OfferingRemembered" && typeof detail.app === "string") writeLastOffering(detail.app);
       if (detail._tag === "AppSelected" && typeof detail.app === "string") setSelected(detail.app);
-      if (detail._tag === "JobCompleted" && typeof detail.jobId === "string") {
-        if (detail.failed === true) return;
-        if (detail.conflict !== true && isJobRequest(detail.request)) rememberJobRequest(detail.jobId, detail.request);
-        if (isRecord(detail.result) && typeof detail.result.body === "string" && detail.result.body !== "") {
-          rememberJobResult(detail.jobId, {
-            body: detail.result.body,
-            contentType: typeof detail.result.contentType === "string" ? detail.result.contentType : "",
-            truncated: false,
-          });
-        }
-        router.push(`/jobs/${detail.jobId}`);
-      }
+      const jobId = completedJobId(detail);
+      if (jobId) router.push(`/jobs/${jobId}`);
     },
     [router],
   );

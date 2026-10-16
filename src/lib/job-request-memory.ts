@@ -33,7 +33,7 @@ export function recallJobResultSnapshot(jobId: string): StoredJobResult | null {
   } catch {
     raw = "";
   }
-  if (resultCache && resultCache.jobId === jobId && resultCache.raw === raw) return resultCache.value;
+  if (resultCache?.jobId === jobId && resultCache.raw === raw) return resultCache.value;
   const value = recallJobResult(jobId);
   resultCache = { jobId, raw, value };
   return value;
