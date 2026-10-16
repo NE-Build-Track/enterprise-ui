@@ -32,11 +32,7 @@ export function JobsBoard() {
   const filtered = useMemo(() => filterJobs(data.jobs, filters), [data.jobs, filters]);
   const page = paginate(filtered, filters.page, JOB_PAGE_SIZE);
   const currency = billingCurrency(data.allowance?.available, data.allowance?.spent, data.allowance?.granted);
-  const costRevision = page.items.map((job) => `${job.id}\t${job.state}\t${job.completed_at ?? ""}`).join("\n");
-  const { costs } = useJobCosts(
-    page.items.map((job) => job.id),
-    costRevision,
-  );
+  const { costs, costsError } = useJobCosts(page.items.map((job) => job.id));
   const apps = useMemo(
     () => [...new Set(data.jobs.map((job) => job.app))].sort((left, right) => left.localeCompare(right)),
     [data.jobs],
@@ -103,6 +99,7 @@ export function JobsBoard() {
         <p>{data.loaded ? `${filtered.length} jobs. Page ${page.page} of ${page.pages}.` : "Loading jobs"}</p>
       )}
       {data.jobsError ? <p role="alert">{data.jobsError}</p> : null}
+      {costsError ? <p role="alert">{costsError}</p> : null}
       {data.loaded && !data.jobsError && filtered.length === 0 ? (
         <output>{data.jobs.length === 0 ? "No jobs yet." : "No jobs match these filters."}</output>
       ) : null}

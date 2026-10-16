@@ -11,7 +11,7 @@ import { api } from "@/lib/client-api";
 import { isRecord } from "@/lib/engine/errors";
 import type { Job, JobCost, JobRequest } from "@/lib/engine/types";
 import { billingCurrency, type BillingCurrency } from "@/lib/job-copy";
-import { jobAfterLoad } from "@/lib/job-load";
+import { jobAfterLoad, jobFromUsage } from "@/lib/job-load";
 import { recallJobRequest, recallJobResultSnapshot, rememberJobRequest, rememberJobResult, subscribeJobResults, type StoredJobResult } from "@/lib/job-request-memory";
 
 export function JobDetail({ id }: { readonly id: string }) {
@@ -56,18 +56,6 @@ export function JobDetail({ id }: { readonly id: string }) {
       clearTimeout(first);
     };
   }, [id, load]);
-
-  useEffect(() => {
-    if (job?.id !== id) return;
-    if (job.state !== "running" && job.state !== "queued") return;
-    const ticket = generation.current;
-    let active = true;
-    const timer = setInterval(() => void load(id, () => active && generation.current === ticket, false), 3_000);
-    return () => {
-      active = false;
-      clearInterval(timer);
-    };
-  }, [id, job, load]);
 
   const repeat = useCallback(
     async (current: Job) => {
@@ -126,6 +114,8 @@ export function JobDetail({ id }: { readonly id: string }) {
           return;
         }
         setUsageError("");
+        const updated = jobFromUsage(result.body, requested);
+        if (updated) setJob(updated);
         await load(requested, () => generation.current === ticket, false);
       });
     },

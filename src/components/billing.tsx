@@ -32,15 +32,10 @@ export function Billing() {
   }, [data.end, data.jobs, data.start]);
   const priced = billingCostJobs(windowJobs);
   const pricedJobs = priced.jobs;
-  const costRevision = pricedJobs.map((job) => `${job.id}\t${job.state}\t${job.completed_at ?? ""}`).join("\n");
-  const { costs, costsError } = useJobCosts(
-    pricedJobs.map((job) => job.id),
-    costRevision,
-  );
+  const { costs, costsError } = useJobCosts(pricedJobs.map((job) => job.id));
   const loadedCount = pricedJobs.filter((job) => costs.has(job.id)).length;
   const costsReady = pricedJobs.length === 0 || loadedCount === pricedJobs.length;
-  const unloaded = pricedJobs.some((job) => costs.has(job.id) && costs.get(job.id) === null);
-  const outside = priced.truncated || unloaded;
+  const outside = priced.truncated;
 
   const onRange = (detail: unknown) => {
     if (!isRecord(detail) || detail._tag !== "RangeChanged") return;
