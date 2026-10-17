@@ -306,7 +306,6 @@ export async function fundAllocation(
       body: {
         amount: { amount: target.amount, currency: "USD" },
         operation_ref: target.operationRef,
-        grant_id: "",
       },
     },
   );

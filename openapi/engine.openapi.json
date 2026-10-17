@@ -593,7 +593,6 @@
             "$ref": "#/components/schemas/Money-Input"
           },
           "grant_id": {
-            "default": "",
             "title": "Grant Id",
             "type": "string"
           },

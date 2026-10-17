@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { flushSync } from "react-dom";
 
 import { GyralElement } from "@/components/GyralElement";
@@ -28,6 +28,8 @@ export function OperatorDesk() {
   const [grantName, setGrantName] = useState("");
   const [grantAmount, setGrantAmount] = useState("100");
   const [grantFundAmount, setGrantFundAmount] = useState("50");
+  const [grantFunding, setGrantFunding] = useState(false);
+  const grantFundInFlight = useRef(false);
   const [grantError, setGrantError] = useState("");
   const [actorId, setActorId] = useState("");
   const [amount, setAmount] = useState("1");
@@ -131,6 +133,29 @@ export function OperatorDesk() {
     });
   }, []);
 
+  async function fundSelectedGrant(event: FormEvent<HTMLFormElement>): Promise<void> {
+    event.preventDefault();
+    if (grantFundInFlight.current) return;
+    grantFundInFlight.current = true;
+    setGrantFunding(true);
+    try {
+      const result = await api("/api/operator/grants/fund", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ grantId, amount: grantFundAmount }),
+      });
+      if (!result.ok) {
+        setGrantError(result.error);
+        return;
+      }
+      setGrantError("");
+      await refresh();
+    } finally {
+      grantFundInFlight.current = false;
+      setGrantFunding(false);
+    }
+  }
+
   async function allocationCommand(
     action: "provision" | "fund" | "pause" | "resume" | "revoke" | "rotate",
     payload: { actorId: string; amount?: string; label?: string; grantId?: string },
@@ -211,35 +236,8 @@ export function OperatorDesk() {
             </label>
             <button type="submit">Create grant</button>
           </form>
-          <form
-            className="cluster"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void api("/api/operator/grants/fund", {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({ grantId, amount: grantFundAmount }),
-              }).then(async (result) => {
-                if (!result.ok) {
-                  setGrantError(result.error);
-                  return;
-                }
-                setGrantError("");
-                await refresh();
-              });
-            }}
-          >
-            <label>
-              <span>Grant</span>
-              <select value={grantId} onChange={(event) => setGrantId(event.target.value)} required={grants.length > 0}>
-                {grants.length === 0 ? <option value="">No grants yet</option> : null}
-                {grants.map((grant) => (
-                  <option key={grant.id} value={grant.id}>
-                    {grant.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <form className="cluster" onSubmit={(event) => void fundSelectedGrant(event)}>
+            <GrantPicker grants={grants} grantId={grantId} onChange={setGrantId} />
             <label>
               <span>Add USD</span>
               <input
@@ -250,7 +248,7 @@ export function OperatorDesk() {
                 autoComplete="off"
               />
             </label>
-            <button type="submit" disabled={grants.length === 0}>
+            <button type="submit" disabled={grants.length === 0 || grantFunding}>
               Fund grant
             </button>
           </form>
@@ -293,17 +291,7 @@ export function OperatorDesk() {
               void allocationCommand("provision", { actorId, amount, label, grantId });
             }}
           >
-            <label>
-              <span>Grant</span>
-              <select value={grantId} onChange={(event) => setGrantId(event.target.value)} required={grants.length > 0}>
-                {grants.length === 0 ? <option value="">No grants yet</option> : null}
-                {grants.map((grant) => (
-                  <option key={grant.id} value={grant.id}>
-                    {grant.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <GrantPicker grants={grants} grantId={grantId} onChange={setGrantId} />
             <label>
               Actor id (required)
               <input value={actorId} onChange={(event) => setActorId(event.target.value)} required autoComplete="off" spellCheck={false} />
@@ -390,6 +378,30 @@ export function OperatorDesk() {
         </article>
       </div>
     </>
+  );
+}
+
+function GrantPicker({
+  grants,
+  grantId,
+  onChange,
+}: {
+  readonly grants: readonly EngineGrant[];
+  readonly grantId: string;
+  readonly onChange: (grantId: string) => void;
+}) {
+  return (
+    <label>
+      <span>Grant</span>
+      <select value={grantId} onChange={(event) => onChange(event.target.value)} required={grants.length > 0}>
+        {grants.length === 0 ? <option value="">No grants yet</option> : null}
+        {grants.map((grant) => (
+          <option key={grant.id} value={grant.id}>
+            {grant.name}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
