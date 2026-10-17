@@ -2,7 +2,7 @@ import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { afterAll, afterEach, beforeAll, expect, it } from "vitest";
 
-import { createGrant, jobResult, listGrants, provisionActor, readyz, reservedProbes, runJob } from "./api";
+import { createGrant, fundAllocation, fundGrant, jobResult, listGrants, provisionActor, readyz, reservedProbes, runJob } from "./api";
 import { createEngineCall } from "./client";
 import { EngineRequestError } from "./errors";
 
@@ -168,6 +168,40 @@ it("creates a grant and keeps the returned amount", async () => {
   const grant = await createGrant(call(), "Ops", "100.00");
   expect(body).toEqual({ name: "Ops", amount: { amount: "100.00", currency: "USD" } });
   expect(grant).toEqual(grantRecord);
+});
+
+it("funds the named grant", async () => {
+  let body: unknown;
+  server.use(
+    http.post("http://engine.test/v1/admin/grant/fund", async ({ request }) => {
+      body = await request.json();
+      return new HttpResponse(null, { status: 204 });
+    }),
+  );
+  await fundGrant(call(), "grant-1", "50", "op-1");
+  expect(body).toEqual({
+    amount: { amount: "50", currency: "USD" },
+    operation_ref: "op-1",
+    grant_id: "grant-1",
+  });
+});
+
+it("funds an allocation with the amount and operation ref", async () => {
+  let body: unknown;
+  server.use(
+    http.post("http://engine.test/v1/admin/applications/:application/actors/:actor/allocation/fund", async ({ request }) => {
+      body = await request.json();
+      return HttpResponse.json({ allocation_id: "alloc" });
+    }),
+  );
+  const actor = await fundAllocation(call(), {
+    applicationId: "default",
+    actorId: "ada",
+    amount: "1",
+    operationRef: "op-1",
+  });
+  expect(body).toEqual({ amount: { amount: "1", currency: "USD" }, operation_ref: "op-1" });
+  expect(actor.allocation_id).toBe("alloc");
 });
 
 it("rejects a grants body that is not a list", async () => {

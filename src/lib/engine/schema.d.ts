@@ -634,6 +634,8 @@ export interface components {
         /** FundRequest */
         FundRequest: {
             amount: components["schemas"]["Money-Input"];
+            /** Grant Id */
+            grant_id?: string;
             /** Operation Ref */
             operation_ref: string;
         };

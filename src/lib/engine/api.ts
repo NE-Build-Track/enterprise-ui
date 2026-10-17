@@ -259,9 +259,18 @@ export async function createGrant(call: EngineCall, name: string, amount: string
   return grant;
 }
 
-export async function fundGrant(call: EngineCall, amount: string, operationRef: string): Promise<void> {
+export async function fundGrant(
+  call: EngineCall,
+  grantId: string,
+  amount: string,
+  operationRef: string,
+): Promise<void> {
   const result = await call.client.POST("/v1/admin/grant/fund", {
-    body: { amount: { amount, currency: "USD" }, operation_ref: operationRef },
+    body: {
+      amount: { amount, currency: "USD" },
+      operation_ref: operationRef,
+      grant_id: grantId,
+    },
   });
   await unwrap(result);
 }
