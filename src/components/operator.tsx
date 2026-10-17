@@ -27,6 +27,7 @@ export function OperatorDesk() {
   const [grantId, setGrantId] = useState("");
   const [grantName, setGrantName] = useState("");
   const [grantAmount, setGrantAmount] = useState("100");
+  const [grantFundAmount, setGrantFundAmount] = useState("50");
   const [grantError, setGrantError] = useState("");
   const [actorId, setActorId] = useState("");
   const [amount, setAmount] = useState("1");
@@ -174,7 +175,7 @@ export function OperatorDesk() {
       <div className="board">
         <article className="panel wide">
           <h2>Grants</h2>
-          <p>Actors are funded from a grant you choose. Create a grant here, then provision an actor against it.</p>
+          <p>Actors are funded from a grant you choose. Create a grant here, add funds to it, then provision an actor against it.</p>
           <form
             className="cluster"
             onSubmit={(event) => {
@@ -210,6 +211,49 @@ export function OperatorDesk() {
             </label>
             <button type="submit">Create grant</button>
           </form>
+          <form
+            className="cluster"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void api("/api/operator/grants/fund", {
+                method: "POST",
+                headers: { "content-type": "application/json" },
+                body: JSON.stringify({ grantId, amount: grantFundAmount }),
+              }).then(async (result) => {
+                if (!result.ok) {
+                  setGrantError(result.error);
+                  return;
+                }
+                setGrantError("");
+                await refresh();
+              });
+            }}
+          >
+            <label>
+              <span>Grant</span>
+              <select value={grantId} onChange={(event) => setGrantId(event.target.value)} required={grants.length > 0}>
+                {grants.length === 0 ? <option value="">No grants yet</option> : null}
+                {grants.map((grant) => (
+                  <option key={grant.id} value={grant.id}>
+                    {grant.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <span>Add USD</span>
+              <input
+                value={grantFundAmount}
+                onChange={(event) => setGrantFundAmount(event.target.value)}
+                inputMode="decimal"
+                required
+                autoComplete="off"
+              />
+            </label>
+            <button type="submit" disabled={grants.length === 0}>
+              Fund grant
+            </button>
+          </form>
           {grantError ? <p role="alert">{grantError}</p> : null}
           {grants.length === 0 ? (
             <output>No grants yet.</output>
@@ -241,7 +285,7 @@ export function OperatorDesk() {
             </table>
           )}
           <h2>Allocations</h2>
-          <p>The actor id is the name you choose. Provisioning uses the selected grant, or the grant configured on the engine when none is selected. It does not create a login key.</p>
+          <p>The actor id is the name you choose. Provisioning uses the selected grant. It does not create a login key.</p>
           <form
             className="cluster"
             onSubmit={(event) => {
@@ -252,7 +296,7 @@ export function OperatorDesk() {
             <label>
               <span>Grant</span>
               <select value={grantId} onChange={(event) => setGrantId(event.target.value)} required={grants.length > 0}>
-                {grants.length === 0 ? <option value="">Engine default</option> : null}
+                {grants.length === 0 ? <option value="">No grants yet</option> : null}
                 {grants.map((grant) => (
                   <option key={grant.id} value={grant.id}>
                     {grant.name}
